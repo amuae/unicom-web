@@ -1,0 +1,2800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流量查询</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 15px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(102, 126, 234, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: white;
+            margin-top: 20px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* 流式加载进度 */
+        .loading-steps {
+            margin-top: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 320px;
+            max-width: 400px;
+        }
+
+        .loading-step {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            color: white;
+            font-size: 14px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+        }
+
+        .loading-step.active {
+            opacity: 1;
+        }
+
+        .loading-step.completed {
+            opacity: 0.7;
+        }
+
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .step-icon.pending {
+            opacity: 0.3;
+        }
+
+        .step-icon.active .step-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .step-icon.completed {
+            color: #4ade80;
+        }
+
+        .step-icon.error {
+            color: #f87171;
+        }
+
+        .step-text {
+            flex: 1;
+        }
+
+        .step-time {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-left: 8px;
+        }
+
+        /* 头部信息 */
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .header-icon-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 8px;
+            background: #f5f7fa;
+            color: #333;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .header-icon-btn:hover {
+            background: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .header-icon-btn:hover span {
+            filter: grayscale(100%) brightness(3);
+        }
+        
+        .header-icon-btn:active {
+            transform: translateY(0);
+        }
+        
+        .header-icon-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .notify-btn {
+            background: #ff9800;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s, transform 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .notify-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .notify-btn:active {
+            transform: translateY(0);
+        }
+
+        .package-name {
+            font-size: 16px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .mobile-number {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .header-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .update-time {
+            font-size: 12px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s, transform 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .refresh-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .refresh-btn:active {
+            transform: translateY(0);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 双栏流量卡片 */
+        .summary-card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .summary-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .summary-item {
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+
+        .summary-item:last-child {
+            border-left-color: #f093fb;
+        }
+
+        .summary-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .summary-value {
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .summary-value-item {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .summary-value-label {
+            font-size: 11px;
+            color: #999;
+            margin-right: 6px;
+        }
+
+        .summary-value-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .summary-total {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .summary-footer {
+            padding: 10px 0 0 0;
+            border-top: 1px solid #f0f0f0;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .summary-footer span:first-child {
+            color: #999;
+        }
+
+        .summary-footer span:last-child {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        /* 横向滑动容器 */
+        .bucket-scroll-container {
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
+            margin: 0 -18px; /* 负边距让滑动延伸到卡片边缘 */
+            padding: 0 18px 10px 18px;
+        }
+
+        .bucket-scroll-container::-webkit-scrollbar {
+            display: none; /* Chrome/Safari */
+        }
+
+        .bucket-scroll-wrapper {
+            display: flex;
+            gap: 12px;
+            width: max-content;
+        }
+
+        /* 流量桶小卡片（用于滑动容器内） */
+        .bucket-mini-card {
+            background: #f8f9ff;
+            border-radius: 10px;
+            padding: 14px;
+            min-width: 160px;
+            flex-shrink: 0;
+            border-left: 3px solid #667eea;
+        }
+
+        .bucket-mini-card.targeted {
+            background: #fff5f8;
+            border-left-color: #f093fb;
+        }
+
+        .bucket-mini-card.regional {
+            background: #f0fff4;
+            border-left-color: #4caf50;
+        }
+
+        .bucket-mini-name {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .bucket-mini-used {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .bucket-mini-total {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 8px;
+        }
+
+        .bucket-mini-bar {
+            height: 4px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .bucket-mini-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        .bucket-mini-detail {
+            font-size: 11px;
+            color: #999;
+            line-height: 1.4;
+        }
+
+        .bucket-mini-detail div {
+            margin-bottom: 2px;
+        }
+
+        /* 流量卡片（保留原有样式用于独立显示） */
+        .flow-card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .flow-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .flow-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .flow-percent {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .flow-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .flow-bar {
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .flow-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .flow-detail {
+            font-size: 12px;
+            color: #999;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* 流量包列表 - 使用进度条样式 */
+        .package-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .package-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .package-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        .package-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+
+        .package-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .package-used {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .package-percent {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .package-bar {
+            height: 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .package-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .package-detail {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #999;
+        }
+
+        /* 副卡信息 */
+        .vice-card {
+            background: #f8f9ff;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .vice-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        
+        .vice-title:hover {
+            color: #764ba2;
+        }
+        
+        .vice-toggle {
+            font-size: 10px;
+            transition: transform 0.3s ease;
+            display: inline-block;
+        }
+        
+        .vice-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+        
+        .vice-content {
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            opacity: 1;
+        }
+        
+        .vice-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .vice-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #e8e8ff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .vice-item:last-child {
+            border-bottom: none;
+        }
+
+        .vice-number {
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .vice-usage {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .vice-current {
+            color: #E60012;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .package-expire {
+            font-size: 11px;
+            color: #ff9800;
+            font-weight: 500;
+            margin-top: 6px;
+        }
+
+        .vice-item:last-child {
+            border-bottom: none;
+        }
+
+        .vice-number {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        /* 错误提示 */
+        .error-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            border-left: 4px solid #ff4444;
+        }
+
+        .error-title {
+            color: #ff4444;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .error-message {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 通知配置弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .modal-overlay.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #999;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #f0f0f0;
+        }
+        
+        .btn-primary, .btn-secondary {
+            flex: 1;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #666;
+        }
+        
+        .btn-primary:hover, .btn-secondary:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-danger {
+            background: #f56c6c;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .btn-danger:hover {
+            opacity: 0.9;
+        }
+        
+        /* 标签页样式 */
+        .tab-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            background: none;
+            color: #999;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab-btn:hover {
+            color: #667eea;
+        }
+        
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 500;
+        }
+
+        /* 底部信息 */
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        .footer-content {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .footer-divider {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .footer-content a {
+            color: #64b5f6;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-content a:hover {
+            color: #90caf9;
+        }
+
+        .footer-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .footer-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .footer-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 响应式 */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .summary-used {
+                font-size: 28px;
+            }
+
+            .package-stats {
+                gap: 8px;
+            }
+        }
+
+        /* 平滑显示动画 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 水印 - 移除，内容已整合到footer */
+        @media (max-width: 600px) {
+            .footer {
+                margin-bottom: 20px;
+            }
+
+            .footer-content {
+                font-size: 11px;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载动画 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">正在查询流量...</div>
+        <div class="loading-steps" id="loadingSteps" style="display: none;">
+            <div class="loading-step" data-step="init">
+                <div class="step-icon pending">⏳</div>
+                <div class="step-text">初始化查询</div>
+            </div>
+            <div class="loading-step" data-step="auth">
+                <div class="step-icon pending">🔐</div>
+                <div class="step-text">验证用户身份</div>
+            </div>
+            <div class="loading-step" data-step="cookie">
+                <div class="step-icon pending">🍪</div>
+                <div class="step-text">获取认证凭证</div>
+            </div>
+            <div class="loading-step" data-step="query">
+                <div class="step-icon pending">📡</div>
+                <div class="step-text">查询流量数据</div>
+            </div>
+            <div class="loading-step" data-step="process">
+                <div class="step-icon pending">⚙️</div>
+                <div class="step-text">分析流量信息</div>
+            </div>
+            <div class="loading-step" data-step="complete">
+                <div class="step-icon pending">✅</div>
+                <div class="step-text">查询完成</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 头部信息 - 重新设计 -->
+        <div class="header fade-in" id="header" style="display: none;">
+            <!-- 套餐名称和操作按钮 -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div>
+                    <div class="package-name" id="packageName" style="font-size: 18px; font-weight: 600; color: #333;">中国联通</div>
+                    <div class="mobile-number" id="mobileNumber" style="font-size: 13px; color: #999; margin-top: 4px;">158****2073</div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="header-icon-btn" onclick="openConfigModal()" title="用户配置">
+                        <span>⚙️</span>
+                    </button>
+                    <button class="header-icon-btn" onclick="refreshData()" id="refreshBtn" title="刷新数据">
+                        <span>🔄</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 余额和消费信息 -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div style="background: #f8f9ff; border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 12px; color: #999; margin-bottom: 4px;">💰 话费余额</div>
+                    <div style="font-size: 20px; font-weight: 600; color: #667eea;">
+                        <span id="balanceAmount">--</span>
+                        <span style="font-size: 12px; font-weight: normal; margin-left: 2px;">元</span>
+                    </div>
+                </div>
+                <div style="background: #fff5f5; border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 12px; color: #999; margin-bottom: 4px;">📊 当月出账</div>
+                    <div style="font-size: 20px; font-weight: 600; color: #f56c6c;">
+                        <span id="monthlyFee">--</span>
+                        <span style="font-size: 12px; font-weight: normal; margin-left: 2px;">元</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 查询时间 -->
+            <div style="display: flex; align-items: center; font-size: 12px; color: #999;">
+                <span>🕐</span>
+                <span style="margin-left: 4px;" id="updateTime">查询时间：加载中...</span>
+            </div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div class="error-card fade-in" id="errorCard" style="display: none;">
+            <div class="error-title">❌ 查询失败</div>
+            <div class="error-message" id="errorMessage"></div>
+            <div style="margin-top: 16px; text-align: center;">
+                <button onclick="openConfigModalToUser()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                    ⚙️ 修改认证信息
+                </button>
+            </div>
+        </div>
+
+        <!-- 双栏流量汇总 -->
+        <div class="summary-card fade-in" id="summaryCard" style="display: none;">
+            <!-- 横向滑动的流量桶容器 -->
+            <div class="bucket-scroll-container">
+                <div class="bucket-scroll-wrapper" id="bucketScrollWrapper">
+                    <!-- 流量桶小卡片将在这里动态生成 -->
+                </div>
+            </div>
+            <div class="summary-footer" id="summaryFooter">
+                <span>⏱️ 时长: </span><span id="timeInterval">计算中...</span>
+            </div>
+        </div>
+
+        <!-- 流量桶列表（隐藏，不再使用） -->
+        <div id="bucketsContainer" style="display: none;"></div>
+
+        <!-- 流量包列表 -->
+        <div id="packagesContainer"></div>
+
+        <!-- 底部 -->
+        <div class="footer">
+            <div class="footer-content">
+                <span>📱 联通查询</span>
+                <span class="footer-divider">|</span>
+                <span>📦 <a href="https://github.com/amuae/unicom-web" target="_blank">github:unicom-web</a></span>
+                <span class="footer-divider">|</span>
+                <span>数据仅供参考，以运营商账单为准</span>
+            </div>
+            <button class="footer-btn" onclick="resetStats()">
+                <span>🔄</span>
+                <span>重置统计周期</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 通知配置弹窗 -->
+    <div class="modal-overlay" id="notifyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">🔔 通知配置</div>
+                <button class="modal-close" onclick="closeNotifyModal()">×</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">通知方式</label>
+                <select class="form-select" id="notifyType">
+                    <option value="">不启用</option>
+                    <option value="bark">Bark</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="dingtalk">钉钉机器人</option>
+                    <option value="qywx">企业微信</option>
+                    <option value="pushplus">PushPlus</option>
+                    <option value="serverchan">Server酱</option>
+                </select>
+            </div>
+            
+            <!-- Bark 参数 -->
+            <div class="form-group notify-params" id="barkParams" style="display:none;">
+                <label class="form-label">Bark Push URL/设备码 *</label>
+                <input type="text" class="form-input" id="barkPush" placeholder="https://api.day.app/你的设备码 或 直接填设备码">
+                <div class="form-hint">填写完整URL或仅设备码(自动使用官方服务器)</div>
+            </div>
+            <div class="form-group notify-params" id="barkParamsExtra" style="display:none;">
+                <label class="form-label">可选参数</label>
+                <input type="text" class="form-input" id="barkSound" placeholder="推送声音 (如: alarm)">
+                <input type="text" class="form-input" id="barkGroup" placeholder="分组名称" style="margin-top:8px;">
+                <input type="text" class="form-input" id="barkIcon" placeholder="图标URL" style="margin-top:8px;">
+                <select class="form-select" id="barkLevel" style="margin-top:8px;">
+                    <option value="">推送级别(默认)</option>
+                    <option value="active">时效性通知</option>
+                    <option value="timeSensitive">时间敏感</option>
+                    <option value="passive">被动通知</option>
+                </select>
+                <input type="text" class="form-input" id="barkUrl" placeholder="点击跳转URL" style="margin-top:8px;">
+                <select class="form-select" id="barkArchive" style="margin-top:8px;">
+                    <option value="">是否自动保存(默认否)</option>
+                    <option value="1">是</option>
+                    <option value="0">否</option>
+                </select>
+            </div>
+
+            <!-- Telegram 参数 -->
+            <div class="form-group notify-params" id="telegramParams" style="display:none;">
+                <label class="form-label">Bot Token *</label>
+                <input type="text" class="form-input" id="tgBotToken" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+                <label class="form-label" style="margin-top:12px;">Chat ID / User ID *</label>
+                <input type="text" class="form-input" id="tgUserId" placeholder="123456789 或 @channel_name">
+                <div class="form-hint">给bot发送消息后使用 https://api.telegram.org/bot你的token/getUpdates 获取</div>
+            </div>
+            <div class="form-group notify-params" id="telegramParamsExtra" style="display:none;">
+                <label class="form-label">可选参数</label>
+                <input type="text" class="form-input" id="tgApiHost" placeholder="API地址 (默认: https://api.telegram.org)">
+                <input type="text" class="form-input" id="tgProxyHost" placeholder="代理主机 (如需代理)" style="margin-top:8px;">
+                <input type="text" class="form-input" id="tgProxyPort" placeholder="代理端口" style="margin-top:8px;">
+                <input type="text" class="form-input" id="tgProxyAuth" placeholder="代理认证 username:password (可选)" style="margin-top:8px;">
+            </div>
+
+            <!-- 钉钉 参数 -->
+            <div class="form-group notify-params" id="dingtalkParams" style="display:none;">
+                <label class="form-label">Access Token *</label>
+                <input type="text" class="form-input" id="ddBotToken" placeholder="钉钉机器人webhook中的access_token参数">
+                <label class="form-label" style="margin-top:12px;">签名密钥 (可选)</label>
+                <input type="text" class="form-input" id="ddBotSecret" placeholder="加签密钥 SEC开头 (若启用了加签)">
+                <div class="form-hint">在钉钉机器人设置中查看webhook地址和安全设置</div>
+            </div>
+
+            <!-- 企业微信 参数 -->
+            <div class="form-group notify-params" id="qywxParams" style="display:none;">
+                <label class="form-label">配置模式</label>
+                <select class="form-select" id="qywxMode" onchange="toggleQywxMode()">
+                    <option value="webhook">Webhook模式 (简单)</option>
+                    <option value="app">应用消息模式 (高级)</option>
+                </select>
+            </div>
+            <div class="form-group notify-params" id="qywxWebhookParams" style="display:none;">
+                <label class="form-label">Webhook Key *</label>
+                <input type="text" class="form-input" id="qywxKey" placeholder="企业微信机器人webhook中的key参数">
+                <div class="form-hint">在企业微信群机器人设置中查看webhook地址</div>
+            </div>
+            <div class="form-group notify-params" id="qywxAppParams" style="display:none;">
+                <label class="form-label">应用配置 (5个参数用逗号分隔) *</label>
+                <input type="text" class="form-input" id="qywxAm" placeholder="corpid,corpsecret,touser,agentid,msgtype">
+                <div class="form-hint">
+                    格式: 企业ID,应用Secret,成员ID,应用AgentId,消息类型<br>
+                    - 成员ID支持多个用|分隔, 或填@all发送给所有人<br>
+                    - 消息类型: 0=图文卡片, 1=文本, 其他=图文消息(需media_id)
+                </div>
+            </div>
+
+            <!-- PushPlus 参数 -->
+            <div class="form-group notify-params" id="pushplusParams" style="display:none;">
+                <label class="form-label">Token *</label>
+                <input type="text" class="form-input" id="pushplusToken" placeholder="在pushplus.plus获取的用户令牌">
+            </div>
+            <div class="form-group notify-params" id="pushplusParamsExtra" style="display:none;">
+                <label class="form-label">可选参数</label>
+                <input type="text" class="form-input" id="pushplusUser" placeholder="群组编码 (一对多推送)">
+                <select class="form-select" id="pushplusTemplate" style="margin-top:8px;">
+                    <option value="">消息模板(默认html)</option>
+                    <option value="html">HTML</option>
+                    <option value="txt">纯文本</option>
+                    <option value="json">JSON</option>
+                    <option value="markdown">Markdown</option>
+                </select>
+                <select class="form-select" id="pushplusChannel" style="margin-top:8px;">
+                    <option value="">消息通道(默认微信)</option>
+                    <option value="wechat">微信公众号</option>
+                    <option value="webhook">第三方Webhook</option>
+                    <option value="cp">企业微信</option>
+                    <option value="mail">邮件</option>
+                    <option value="sms">短信</option>
+                </select>
+                <input type="text" class="form-input" id="pushplusWebhook" placeholder="第三方Webhook地址" style="margin-top:8px;">
+                <input type="text" class="form-input" id="pushplusCallbackUrl" placeholder="回调地址" style="margin-top:8px;">
+                <input type="text" class="form-input" id="pushplusTo" placeholder="好友令牌" style="margin-top:8px;">
+            </div>
+
+            <!-- Server酱 参数 -->
+            <div class="form-group notify-params" id="serverchanParams" style="display:none;">
+                <label class="form-label">SendKey *</label>
+                <input type="text" class="form-input" id="pushKey" placeholder="SCT开头(Turbo版) 或 sctp数字t开头(私有部署)">
+                <div class="form-hint">在sct.ftqq.com获取SendKey, Turbo版以SCT开头</div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">通知标题</label>
+                <input type="text" class="form-input" id="notifyTitle" placeholder="[套餐] [时长]" value="[套餐] [时长]">
+                <div class="form-hint">可用占位符：[套餐]、[时长]、[时间]</div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">通知副标题</label>
+                <input type="text" class="form-input" id="notifySubtitle" placeholder="[所有通用.用量] [所有免流.用量]" value="[所有通用.用量] [所有免流.用量]">
+                <div class="form-hint">可用占位符示例：[通用有限.用量]、[免流不限.已用]</div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">通知正文</label>
+                <textarea class="form-textarea" id="notifyContent" placeholder="通知正文内容">通用: [所有通用.已用] 剩余: [所有通用.剩余]
+免流: [所有免流.已用] 剩余: [所有免流.剩余]
+总流量: [所有流量.已用] / [所有流量.总量]
+查询时间: [时间]</textarea>
+                <div class="form-hint">可用所有流量桶的占位符，格式：[桶名.字段]</div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">通知阈值（MB）</label>
+                <input type="number" class="form-input" id="notifyThreshold" placeholder="0" min="0" value="0">
+                <div class="form-hint">仅当 [所有通用.用量] 超过此值（MB）时才发送通知，0表示每次都通知</div>
+            </div>
+            
+            <div class="form-group" style="background: #f8f9ff; padding: 12px; border-radius: 8px; font-size: 12px; color: #666;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #333;">📝 可用占位符说明</div>
+                <div style="line-height: 1.8;">
+                    <div><strong>基础信息：</strong>[套餐]、[时长]、[时间]</div>
+                    <div><strong>流量桶：</strong>通用有限、通用不限、区域有限、区域不限、免流有限、免流不限</div>
+                    <div><strong>汇总桶：</strong>所有通用、所有免流、所有流量</div>
+                    <div><strong>字段：</strong>.总量、.已用、.剩余、.用量、.今日用量</div>
+                    <div style="margin-top: 4px; color: #667eea;"><strong>示例：</strong>[通用有限.用量]、[所有通用.已用]、[免流不限.剩余]</div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeNotifyModal()">取消</button>
+                <button class="btn-primary" onclick="saveNotifyConfig()">保存配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户配置弹框 -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <div class="modal-title">⚙️ 用户配置</div>
+                <button class="modal-close" onclick="closeConfigModal()">×</button>
+            </div>
+            
+            <!-- 标签页切换 -->
+            <div style="display: flex; border-bottom: 2px solid #f0f0f0; margin-bottom: 20px;">
+                <button class="tab-btn active" onclick="switchConfigTab('notify')" id="tabNotify">
+                    <span>🔔</span>
+                    <span>通知配置</span>
+                </button>
+                <button class="tab-btn" onclick="switchConfigTab('user')" id="tabUser">
+                    <span>👤</span>
+                    <span>用户配置</span>
+                </button>
+            </div>
+            
+            <!-- 通知配置标签页 -->
+            <div id="notifyConfigTab" style="max-height: 500px; overflow-y: auto;">
+                <div class="form-group">
+                    <label class="form-label">通知方式</label>
+                    <select class="form-select" id="configNotifyType" onchange="updateConfigParamsDisplay()">
+                        <option value="">不启用</option>
+                        <option value="bark">Bark</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="dingtalk">钉钉机器人</option>
+                        <option value="qywx">企业微信</option>
+                        <option value="pushplus">PushPlus</option>
+                        <option value="serverchan">Server酱</option>
+                    </select>
+                </div>
+                
+                <!-- Bark 参数 -->
+                <div class="form-group config-notify-params" id="configBarkParams" style="display:none;">
+                    <label class="form-label">Bark Push URL/设备码 *</label>
+                    <input type="text" class="form-input" id="configBarkPush" placeholder="https://api.day.app/你的设备码 或 直接填设备码">
+                    <div class="form-hint">填写完整URL或仅设备码(自动使用官方服务器)</div>
+                </div>
+                <div class="form-group config-notify-params" id="configBarkParamsExtra" style="display:none;">
+                    <label class="form-label">可选参数</label>
+                    <input type="text" class="form-input" id="configBarkSound" placeholder="推送声音 (如: alarm)">
+                    <input type="text" class="form-input" id="configBarkGroup" placeholder="分组名称" style="margin-top:8px;">
+                    <input type="text" class="form-input" id="configBarkIcon" placeholder="图标URL" style="margin-top:8px;">
+                    <input type="text" class="form-input" id="configBarkUrl" placeholder="点击跳转URL" style="margin-top:8px;">
+                </div>
+
+                <!-- Telegram 参数 -->
+                <div class="form-group config-notify-params" id="configTelegramParams" style="display:none;">
+                    <label class="form-label">Bot Token *</label>
+                    <input type="text" class="form-input" id="configTgBotToken" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+                    <label class="form-label" style="margin-top:12px;">Chat ID / User ID *</label>
+                    <input type="text" class="form-input" id="configTgUserId" placeholder="123456789 或 @channel_name">
+                    <div class="form-hint">给bot发送消息后使用 https://api.telegram.org/bot你的token/getUpdates 获取</div>
+                </div>
+                <div class="form-group config-notify-params" id="configTelegramParamsExtra" style="display:none;">
+                    <label class="form-label">可选参数</label>
+                    <input type="text" class="form-input" id="configTgApiHost" placeholder="API地址 (默认: https://api.telegram.org)">
+                    <input type="text" class="form-input" id="configTgProxyHost" placeholder="代理主机 (如需代理)" style="margin-top:8px;">
+                    <input type="text" class="form-input" id="configTgProxyPort" placeholder="代理端口" style="margin-top:8px;">
+                </div>
+
+                <!-- 钉钉 参数 -->
+                <div class="form-group config-notify-params" id="configDingtalkParams" style="display:none;">
+                    <label class="form-label">Access Token *</label>
+                    <input type="text" class="form-input" id="configDdBotToken" placeholder="钉钉机器人webhook中的access_token参数">
+                    <label class="form-label" style="margin-top:12px;">签名密钥 (可选)</label>
+                    <input type="text" class="form-input" id="configDdBotSecret" placeholder="加签密钥 SEC开头 (若启用了加签)">
+                    <div class="form-hint">在钉钉机器人设置中查看webhook地址和安全设置</div>
+                </div>
+
+                <!-- 企业微信 参数 -->
+                <div class="form-group config-notify-params" id="configQywxParams" style="display:none;">
+                    <label class="form-label">配置模式</label>
+                    <select class="form-select" id="configQywxMode" onchange="toggleConfigQywxMode()">
+                        <option value="webhook">Webhook模式 (简单)</option>
+                        <option value="app">应用消息模式 (高级)</option>
+                    </select>
+                </div>
+                <div class="form-group config-notify-params" id="configQywxWebhookParams" style="display:none;">
+                    <label class="form-label">Webhook Key *</label>
+                    <input type="text" class="form-input" id="configQywxKey" placeholder="企业微信机器人webhook中的key参数">
+                    <div class="form-hint">在企业微信群机器人设置中查看webhook地址</div>
+                </div>
+                <div class="form-group config-notify-params" id="configQywxAppParams" style="display:none;">
+                    <label class="form-label">应用配置 (5个参数用逗号分隔) *</label>
+                    <input type="text" class="form-input" id="configQywxAm" placeholder="corpid,corpsecret,touser,agentid,msgtype">
+                    <div class="form-hint">格式: 企业ID,应用Secret,成员ID,应用AgentId,消息类型</div>
+                </div>
+
+                <!-- PushPlus 参数 -->
+                <div class="form-group config-notify-params" id="configPushplusParams" style="display:none;">
+                    <label class="form-label">Token *</label>
+                    <input type="text" class="form-input" id="configPushplusToken" placeholder="在pushplus.plus获取的用户令牌">
+                    <label class="form-label" style="margin-top:12px;">群组编码 (可选)</label>
+                    <input type="text" class="form-input" id="configPushplusUser" placeholder="群组编码 (一对多推送)">
+                </div>
+
+                <!-- Server酱 参数 -->
+                <div class="form-group config-notify-params" id="configServerchanParams" style="display:none;">
+                    <label class="form-label">SendKey *</label>
+                    <input type="text" class="form-input" id="configScSendkey" placeholder="Server酱的SendKey">
+                    <div class="form-hint">在 sct.ftqq.com 获取SendKey</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">通知阈值 (MB)</label>
+                    <input type="number" class="form-input" id="configThreshold" placeholder="0" min="0" value="0">
+                    <div class="form-hint">设置为0则不发送通知，大于0时当"所有通用"累计用量达到阈值后发送通知并清零</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">通知标题</label>
+                    <input type="text" class="form-input" id="configTitle" placeholder="例如：[套餐] [时长]">
+                    <div class="form-hint">可用占位符：[套餐]、[时长]、[时间]</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">通知副标题</label>
+                    <input type="text" class="form-input" id="configSubtitle" placeholder="例如：跳: [通用有限.用量] 钉: [免流不限.用量]">
+                    <div class="form-hint">可用占位符示例：[通用有限.用量]、[免流不限.已用]</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">通知正文</label>
+                    <textarea class="form-textarea" id="configContent" rows="5" placeholder="通知正文内容">通用: [所有通用.已用] 剩余: [所有通用.剩余]
+免流: [所有免流.已用] 剩余: [所有免流.剩余]
+总流量: [所有流量.已用] / [所有流量.总量]
+查询时间: [时间]</textarea>
+                    <div class="form-hint">可用所有流量桶的占位符，格式：[桶名.字段]</div>
+                </div>
+                
+                <div class="form-group" style="background: #f8f9ff; padding: 12px; border-radius: 8px; font-size: 12px; color: #666;">
+                    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">📝 可用占位符说明</div>
+                    <div style="line-height: 1.8;">
+                        <div><strong>基础信息：</strong>[套餐]、[时长]、[时间]</div>
+                        <div><strong>流量桶：</strong>通用有限、通用不限、区域有限、区域不限、免流有限、免流不限</div>
+                        <div><strong>汇总桶：</strong>所有通用、所有免流、所有流量</div>
+                        <div><strong>字段：</strong>.总量、.已用、.剩余、.用量、.今日用量</div>
+                        <div style="margin-top: 4px; color: #667eea;"><strong>示例：</strong>[通用有限.用量]、[所有通用.已用]、[免流不限.剩余]</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">⏰ 定时查询间隔 (分钟)</label>
+                    <input type="number" class="form-input" id="configInterval" value="5" min="0" max="1440" placeholder="默认5分钟">
+                    <div class="form-hint">自动查询流量的时间间隔，建议5-60分钟。设置为0表示不自动查询。</div>
+                </div>
+            </div>
+            
+            <!-- 用户配置标签页 -->
+            <div id="userConfigTab" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">手机号</label>
+                    <input type="text" class="form-input" id="userMobile" readonly style="background: #f5f5f5;">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">认证方式</label>
+                    <select class="form-select" id="userAuthType" onchange="toggleAuthFields()">
+                        <option value="full">完整凭证 (手机号 + AppID + Token)</option>
+                        <option value="cookie">Cookie方式</option>
+                    </select>
+                </div>
+                
+                <!-- 完整凭证字段 -->
+                <div id="fullAuthFields">
+                    <div class="form-group">
+                        <label class="form-label">AppID</label>
+                        <input type="text" class="form-input" id="userAppId" placeholder="应用ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Token Online</label>
+                        <textarea class="form-input" id="userTokenOnline" rows="3" placeholder="在线凭证Token"></textarea>
+                    </div>
+                </div>
+                
+                <!-- Cookie字段 -->
+                <div id="cookieAuthFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Cookie</label>
+                        <textarea class="form-input" id="userCookie" rows="4" placeholder="从浏览器或抓包工具获取的Cookie"></textarea>
+                        <div class="form-hint">Cookie会在流量查询时自动更新，通常无需手动修改</div>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #f0f0f0;">
+                    <label class="form-label" style="color: #f56c6c;">⚠️ 危险操作</label>
+                    <button class="btn-danger" onclick="confirmDeleteUser()" style="width: 100%; background: #f56c6c; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                        🗑️ 删除此用户
+                    </button>
+                    <div class="form-hint" style="color: #f56c6c;">删除后将无法恢复，所有配置和数据将被清除</div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeConfigModal()">取消</button>
+                <button class="btn-primary" onclick="saveConfigModal()">保存配置</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRefreshing = false;
+        let notifyConfig = null;
+        
+        // 从URL获取token
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get('token');
+        
+        if (!accessToken) {
+            document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;"><h2 style="color:#e74c3c;">❌ 访问错误</h2><p style="color:#666;">未找到访问令牌，请从管理面板获取正确的访问链接</p></div>';
+            throw new Error('Missing access token');
+        }
+
+        // 页面加载时自动查询和加载配置
+        window.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('notifyType').addEventListener('change', updateParamsDisplay);
+            loadNotifyConfig();
+            fetchData();
+        });
+
+        // 打开通知配置弹窗
+        function openNotifyModal() {
+            document.getElementById('notifyModal').classList.add('show');
+            loadNotifyConfigToForm();
+        }
+
+        // 关闭通知配置弹窗
+        function closeNotifyModal() {
+            document.getElementById('notifyModal').classList.remove('show');
+        }
+        
+        // ===== 配置弹窗函数 =====
+        
+        // 打开配置弹窗
+        async function openConfigModal() {
+            document.getElementById('configModal').classList.add('show');
+            // 默认显示通知配置标签
+            switchConfigTab('notify');
+            // 加载当前配置
+            await loadConfigData();
+        }
+        
+        // 打开配置弹窗（直接跳到用户配置标签）
+        async function openConfigModalToUser() {
+            document.getElementById('configModal').classList.add('show');
+            // 直接显示用户配置标签
+            switchConfigTab('user');
+            // 加载当前配置
+            await loadConfigData();
+        }
+        
+        // 关闭配置弹窗
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.remove('show');
+        }
+        
+        // 切换配置标签
+        function switchConfigTab(tab) {
+            // 更新标签按钮状态
+            document.getElementById('tabNotify').classList.toggle('active', tab === 'notify');
+            document.getElementById('tabUser').classList.toggle('active', tab === 'user');
+            
+            // 切换内容显示
+            document.getElementById('notifyConfigTab').style.display = tab === 'notify' ? 'block' : 'none';
+            document.getElementById('userConfigTab').style.display = tab === 'user' ? 'block' : 'none';
+        }
+        
+        // 切换认证方式字段显示
+        function toggleAuthFields() {
+            const authType = document.getElementById('userAuthType').value;
+            document.getElementById('fullAuthFields').style.display = authType === 'full' ? 'block' : 'none';
+            document.getElementById('cookieAuthFields').style.display = authType === 'cookie' ? 'block' : 'none';
+        }
+        
+        // 加载配置数据
+        async function loadConfigData() {
+            try {
+                // 加载通知配置
+                const notifyResp = await fetch(`../api/notify.php?token=${accessToken}`);
+                const notifyResult = await notifyResp.json();
+                
+                if (notifyResult.success && notifyResult.data) {
+                    const notifyData = notifyResult.data;
+                    document.getElementById('configNotifyType').value = notifyData.type || '';
+                    document.getElementById('configThreshold').value = notifyData.threshold || 0;
+                    document.getElementById('configInterval').value = notifyData.interval || 5;
+                    
+                    // 加载标题、副标题、正文
+                    document.getElementById('configTitle').value = notifyData.title || '';
+                    document.getElementById('configSubtitle').value = notifyData.subtitle || '';
+                    document.getElementById('configContent').value = notifyData.content || '';
+                    
+                    // 加载各个通知方式的参数
+                    const params = notifyData.params || {};
+                    
+                    // Bark
+                    document.getElementById('configBarkPush').value = params.push || '';
+                    document.getElementById('configBarkSound').value = params.sound || '';
+                    document.getElementById('configBarkGroup').value = params.group || '';
+                    document.getElementById('configBarkIcon').value = params.icon || '';
+                    document.getElementById('configBarkUrl').value = params.url || '';
+                    
+                    // Telegram
+                    document.getElementById('configTgBotToken').value = params.botToken || '';
+                    document.getElementById('configTgUserId').value = params.chatId || '';
+                    document.getElementById('configTgApiHost').value = params.apiHost || '';
+                    document.getElementById('configTgProxyHost').value = params.proxyHost || '';
+                    document.getElementById('configTgProxyPort').value = params.proxyPort || '';
+                    
+                    // 钉钉
+                    document.getElementById('configDdBotToken').value = params.accessToken || '';
+                    document.getElementById('configDdBotSecret').value = params.secret || '';
+                    
+                    // 企业微信
+                    document.getElementById('configQywxMode').value = params.mode || 'webhook';
+                    document.getElementById('configQywxKey').value = params.key || '';
+                    document.getElementById('configQywxAm').value = params.am || '';
+                    
+                    // PushPlus
+                    document.getElementById('configPushplusToken').value = params.token || '';
+                    document.getElementById('configPushplusUser').value = params.user || '';
+                    
+                    // Server酱
+                    document.getElementById('configScSendkey').value = params.sendkey || '';
+                    
+                    // 更新参数显示
+                    updateConfigParamsDisplay();
+                }
+                
+                // 加载用户配置
+                const userResp = await fetch(`../api/user.php?token=${accessToken}`);
+                const userData = await userResp.json();
+                
+                if (userData.success) {
+                    const user = userData.data;
+                    document.getElementById('userMobile').value = user.mobile;
+                    document.getElementById('userAuthType').value = user.auth_type || 'full';
+                    document.getElementById('userAppId').value = user.appid || '';
+                    document.getElementById('userTokenOnline').value = user.token_online || '';
+                    document.getElementById('userCookie').value = user.cookie || '';
+                    
+                    toggleAuthFields();
+                }
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+        
+        // 更新配置参数显示
+        function updateConfigParamsDisplay() {
+            const type = document.getElementById('configNotifyType').value;
+            
+            // 隐藏所有参数组
+            document.querySelectorAll('.config-notify-params').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // 根据类型显示对应参数
+            switch(type) {
+                case 'bark':
+                    document.getElementById('configBarkParams').style.display = 'block';
+                    document.getElementById('configBarkParamsExtra').style.display = 'block';
+                    break;
+                case 'telegram':
+                    document.getElementById('configTelegramParams').style.display = 'block';
+                    document.getElementById('configTelegramParamsExtra').style.display = 'block';
+                    break;
+                case 'dingtalk':
+                    document.getElementById('configDingtalkParams').style.display = 'block';
+                    break;
+                case 'qywx':
+                    document.getElementById('configQywxParams').style.display = 'block';
+                    toggleConfigQywxMode();
+                    break;
+                case 'pushplus':
+                    document.getElementById('configPushplusParams').style.display = 'block';
+                    break;
+                case 'serverchan':
+                    document.getElementById('configServerchanParams').style.display = 'block';
+                    break;
+            }
+        }
+        
+        // 切换企业微信模式
+        function toggleConfigQywxMode() {
+            const mode = document.getElementById('configQywxMode').value;
+            const webhookParams = document.getElementById('configQywxWebhookParams');
+            const appParams = document.getElementById('configQywxAppParams');
+            
+            if (mode === 'webhook') {
+                webhookParams.style.display = 'block';
+                appParams.style.display = 'none';
+            } else {
+                webhookParams.style.display = 'none';
+                appParams.style.display = 'block';
+            }
+        }
+        
+        // 保存配置
+        async function saveConfigModal() {
+            try {
+                // 保存通知配置
+                const notifyType = document.getElementById('configNotifyType').value;
+                const threshold = parseFloat(document.getElementById('configThreshold').value) || 0;
+                const interval = parseInt(document.getElementById('configInterval').value) || 5;
+                const title = document.getElementById('configTitle').value;
+                const subtitle = document.getElementById('configSubtitle').value;
+                const content = document.getElementById('configContent').value;
+                
+                // 根据通知类型收集参数
+                let params = {};
+                if (notifyType) {
+                    switch(notifyType) {
+                        case 'bark':
+                            params = {
+                                push: document.getElementById('configBarkPush').value,
+                                sound: document.getElementById('configBarkSound').value,
+                                group: document.getElementById('configBarkGroup').value,
+                                icon: document.getElementById('configBarkIcon').value,
+                                url: document.getElementById('configBarkUrl').value
+                            };
+                            if (!params.push) {
+                                alert('请填写 Bark Push URL 或设备码');
+                                return;
+                            }
+                            break;
+                        case 'telegram':
+                            params = {
+                                botToken: document.getElementById('configTgBotToken').value,
+                                chatId: document.getElementById('configTgUserId').value,
+                                apiHost: document.getElementById('configTgApiHost').value,
+                                proxyHost: document.getElementById('configTgProxyHost').value,
+                                proxyPort: document.getElementById('configTgProxyPort').value
+                            };
+                            if (!params.botToken || !params.chatId) {
+                                alert('请填写 Telegram Bot Token 和 Chat ID');
+                                return;
+                            }
+                            break;
+                        case 'dingtalk':
+                            params = {
+                                accessToken: document.getElementById('configDdBotToken').value,
+                                secret: document.getElementById('configDdBotSecret').value
+                            };
+                            if (!params.accessToken) {
+                                alert('请填写钉钉 Access Token');
+                                return;
+                            }
+                            break;
+                        case 'qywx':
+                            const mode = document.getElementById('configQywxMode').value;
+                            params = { mode: mode };
+                            if (mode === 'webhook') {
+                                params.key = document.getElementById('configQywxKey').value;
+                                if (!params.key) {
+                                    alert('请填写企业微信 Webhook Key');
+                                    return;
+                                }
+                            } else {
+                                params.am = document.getElementById('configQywxAm').value;
+                                if (!params.am) {
+                                    alert('请填写企业微信应用配置');
+                                    return;
+                                }
+                            }
+                            break;
+                        case 'pushplus':
+                            params = {
+                                token: document.getElementById('configPushplusToken').value,
+                                user: document.getElementById('configPushplusUser').value
+                            };
+                            if (!params.token) {
+                                alert('请填写 PushPlus Token');
+                                return;
+                            }
+                            break;
+                        case 'serverchan':
+                            params = {
+                                sendkey: document.getElementById('configScSendkey').value
+                            };
+                            if (!params.sendkey) {
+                                alert('请填写 Server酱 SendKey');
+                                return;
+                            }
+                            break;
+                    }
+                }
+                
+                const notifyConfig = {
+                    type: notifyType,
+                    threshold: threshold,
+                    interval: interval,
+                    title: title,
+                    subtitle: subtitle,
+                    content: content,
+                    params: params
+                };
+                
+                console.log('保存通知配置:', notifyConfig);
+                const notifyResp = await fetch(`../api/notify.php?token=${accessToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(notifyConfig)
+                });
+                
+                console.log('通知配置响应状态:', notifyResp.status);
+                if (!notifyResp.ok) {
+                    const errorText = await notifyResp.text();
+                    console.error('通知配置保存失败:', errorText);
+                    throw new Error('通知配置保存失败: ' + notifyResp.status);
+                }
+                
+                const notifyResult = await notifyResp.json();
+                console.log('通知配置保存结果:', notifyResult);
+                
+                if (!notifyResult.success) {
+                    throw new Error('通知配置保存失败: ' + notifyResult.message);
+                }
+                
+                // 保存用户配置
+                const authType = document.getElementById('userAuthType').value;
+                const userConfig = {
+                    auth_type: authType,
+                    appid: authType === 'full' ? document.getElementById('userAppId').value : '',
+                    token_online: authType === 'full' ? document.getElementById('userTokenOnline').value : '',
+                    cookie: authType === 'cookie' ? document.getElementById('userCookie').value : ''
+                };
+                
+                console.log('保存用户配置:', userConfig);
+                const userResp = await fetch(`../api/user.php?token=${accessToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userConfig)
+                });
+                
+                console.log('用户配置响应状态:', userResp.status);
+                if (!userResp.ok) {
+                    const errorText = await userResp.text();
+                    console.error('用户配置保存失败:', errorText);
+                    throw new Error('用户配置保存失败: ' + userResp.status);
+                }
+                
+                const userResult = await userResp.json();
+                
+                if (userResult.success) {
+                    alert('配置保存成功！');
+                    closeConfigModal();
+                } else {
+                    alert('保存失败: ' + userResult.message);
+                }
+            } catch (error) {
+                console.error('保存配置失败:', error);
+                alert('保存失败: ' + error.message);
+            }
+        }
+        
+        // 确认删除用户
+        function confirmDeleteUser() {
+            if (confirm('确定要删除此用户吗？\n\n删除后将清除所有配置和数据，且无法恢复！')) {
+                if (confirm('再次确认：真的要删除吗？')) {
+                    deleteUser();
+                }
+            }
+        }
+        
+        // 删除用户
+        async function deleteUser() {
+            try {
+                const resp = await fetch(`../api/user.php?token=${accessToken}`, {
+                    method: 'DELETE'
+                });
+                const result = await resp.json();
+                
+                if (result.success) {
+                    alert('用户已删除');
+                    // 跳转到管理页面或首页
+                    window.location.href = '../admin/index.php';
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            } catch (error) {
+                console.error('删除用户失败:', error);
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // 切换企业微信模式
+        function toggleQywxMode() {
+            const mode = document.getElementById('qywxMode').value;
+            const webhookParams = document.getElementById('qywxWebhookParams');
+            const appParams = document.getElementById('qywxAppParams');
+            
+            if (mode === 'webhook') {
+                webhookParams.style.display = 'block';
+                appParams.style.display = 'none';
+            } else {
+                webhookParams.style.display = 'none';
+                appParams.style.display = 'block';
+            }
+        }
+
+        // 更新参数显示
+        function updateParamsDisplay() {
+            const type = document.getElementById('notifyType').value;
+            
+            // 隐藏所有参数组
+            document.querySelectorAll('.notify-params').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // 根据类型显示对应参数
+            switch(type) {
+                case 'bark':
+                    document.getElementById('barkParams').style.display = 'block';
+                    document.getElementById('barkParamsExtra').style.display = 'block';
+                    break;
+                case 'telegram':
+                    document.getElementById('telegramParams').style.display = 'block';
+                    document.getElementById('telegramParamsExtra').style.display = 'block';
+                    break;
+                case 'dingtalk':
+                    document.getElementById('dingtalkParams').style.display = 'block';
+                    break;
+                case 'qywx':
+                    document.getElementById('qywxParams').style.display = 'block';
+                    const mode = document.getElementById('qywxMode').value;
+                    if (mode === 'webhook') {
+                        document.getElementById('qywxWebhookParams').style.display = 'block';
+                    } else {
+                        document.getElementById('qywxAppParams').style.display = 'block';
+                    }
+                    break;
+                case 'pushplus':
+                    document.getElementById('pushplusParams').style.display = 'block';
+                    document.getElementById('pushplusParamsExtra').style.display = 'block';
+                    break;
+                case 'serverchan':
+                    document.getElementById('serverchanParams').style.display = 'block';
+                    break;
+            }
+        }
+
+        // 加载通知配置到表单
+        function loadNotifyConfigToForm() {
+            if (notifyConfig) {
+                document.getElementById('notifyType').value = notifyConfig.type || '';
+                document.getElementById('notifyTitle').value = notifyConfig.title || '[套餐] [时长]';
+                document.getElementById('notifySubtitle').value = notifyConfig.subtitle || '[所有通用.用量] [所有免流.用量]';
+                document.getElementById('notifyContent').value = notifyConfig.content || '';
+                document.getElementById('notifyThreshold').value = notifyConfig.threshold || 0;
+                document.getElementById('configInterval').value = notifyConfig.queryInterval || 5;
+                
+                // 加载各服务参数
+                const params = notifyConfig.params || {};
+                
+                // Bark
+                if (params.barkPush) document.getElementById('barkPush').value = params.barkPush;
+                if (params.barkSound) document.getElementById('barkSound').value = params.barkSound;
+                if (params.barkGroup) document.getElementById('barkGroup').value = params.barkGroup;
+                if (params.barkIcon) document.getElementById('barkIcon').value = params.barkIcon;
+                if (params.barkLevel) document.getElementById('barkLevel').value = params.barkLevel;
+                if (params.barkUrl) document.getElementById('barkUrl').value = params.barkUrl;
+                if (params.barkArchive) document.getElementById('barkArchive').value = params.barkArchive;
+                
+                // Telegram
+                if (params.tgBotToken) document.getElementById('tgBotToken').value = params.tgBotToken;
+                if (params.tgUserId) document.getElementById('tgUserId').value = params.tgUserId;
+                if (params.tgApiHost) document.getElementById('tgApiHost').value = params.tgApiHost;
+                if (params.tgProxyHost) document.getElementById('tgProxyHost').value = params.tgProxyHost;
+                if (params.tgProxyPort) document.getElementById('tgProxyPort').value = params.tgProxyPort;
+                if (params.tgProxyAuth) document.getElementById('tgProxyAuth').value = params.tgProxyAuth;
+                
+                // DingTalk
+                if (params.ddBotToken) document.getElementById('ddBotToken').value = params.ddBotToken;
+                if (params.ddBotSecret) document.getElementById('ddBotSecret').value = params.ddBotSecret;
+                
+                // 企业微信
+                if (params.qywxMode) document.getElementById('qywxMode').value = params.qywxMode;
+                if (params.qywxKey) document.getElementById('qywxKey').value = params.qywxKey;
+                if (params.qywxAm) document.getElementById('qywxAm').value = params.qywxAm;
+                
+                // PushPlus
+                if (params.pushplusToken) document.getElementById('pushplusToken').value = params.pushplusToken;
+                if (params.pushplusUser) document.getElementById('pushplusUser').value = params.pushplusUser;
+                if (params.pushplusTemplate) document.getElementById('pushplusTemplate').value = params.pushplusTemplate;
+                if (params.pushplusChannel) document.getElementById('pushplusChannel').value = params.pushplusChannel;
+                if (params.pushplusWebhook) document.getElementById('pushplusWebhook').value = params.pushplusWebhook;
+                if (params.pushplusCallbackUrl) document.getElementById('pushplusCallbackUrl').value = params.pushplusCallbackUrl;
+                if (params.pushplusTo) document.getElementById('pushplusTo').value = params.pushplusTo;
+                
+                // ServerChan
+                if (params.pushKey) document.getElementById('pushKey').value = params.pushKey;
+            }
+            updateParamsDisplay();
+        }
+
+        // 监听通知类型变化
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('notifyType').addEventListener('change', updateParamsDisplay);
+        });
+
+        // 保存通知配置
+        async function saveNotifyConfig() {
+            const type = document.getElementById('notifyType').value;
+            const params = {};
+            
+            // 收集各服务参数
+            if (type === 'bark') {
+                params.barkPush = document.getElementById('barkPush').value.trim();
+                if (!params.barkPush) {
+                    alert('请输入Bark Push URL或设备码');
+                    return;
+                }
+                params.barkSound = document.getElementById('barkSound').value.trim();
+                params.barkGroup = document.getElementById('barkGroup').value.trim();
+                params.barkIcon = document.getElementById('barkIcon').value.trim();
+                params.barkLevel = document.getElementById('barkLevel').value;
+                params.barkUrl = document.getElementById('barkUrl').value.trim();
+                params.barkArchive = document.getElementById('barkArchive').value;
+            } else if (type === 'telegram') {
+                params.tgBotToken = document.getElementById('tgBotToken').value.trim();
+                params.tgUserId = document.getElementById('tgUserId').value.trim();
+                if (!params.tgBotToken || !params.tgUserId) {
+                    alert('请输入Bot Token和Chat ID');
+                    return;
+                }
+                params.tgApiHost = document.getElementById('tgApiHost').value.trim();
+                params.tgProxyHost = document.getElementById('tgProxyHost').value.trim();
+                params.tgProxyPort = document.getElementById('tgProxyPort').value.trim();
+                params.tgProxyAuth = document.getElementById('tgProxyAuth').value.trim();
+            } else if (type === 'dingtalk') {
+                params.ddBotToken = document.getElementById('ddBotToken').value.trim();
+                if (!params.ddBotToken) {
+                    alert('请输入钉钉Access Token');
+                    return;
+                }
+                params.ddBotSecret = document.getElementById('ddBotSecret').value.trim();
+            } else if (type === 'qywx') {
+                params.qywxMode = document.getElementById('qywxMode').value;
+                if (params.qywxMode === 'webhook') {
+                    params.qywxKey = document.getElementById('qywxKey').value.trim();
+                    if (!params.qywxKey) {
+                        alert('请输入企业微信Webhook Key');
+                        return;
+                    }
+                } else {
+                    params.qywxAm = document.getElementById('qywxAm').value.trim();
+                    if (!params.qywxAm) {
+                        alert('请输入企业微信应用配置（5个参数用逗号分隔）');
+                        return;
+                    }
+                    const parts = params.qywxAm.split(',');
+                    if (parts.length < 4) {
+                        alert('企业微信应用配置格式错误，需要至少4个参数：corpid,corpsecret,touser,agentid');
+                        return;
+                    }
+                }
+            } else if (type === 'pushplus') {
+                params.pushplusToken = document.getElementById('pushplusToken').value.trim();
+                if (!params.pushplusToken) {
+                    alert('请输入PushPlus Token');
+                    return;
+                }
+                params.pushplusUser = document.getElementById('pushplusUser').value.trim();
+                params.pushplusTemplate = document.getElementById('pushplusTemplate').value;
+                params.pushplusChannel = document.getElementById('pushplusChannel').value;
+                params.pushplusWebhook = document.getElementById('pushplusWebhook').value.trim();
+                params.pushplusCallbackUrl = document.getElementById('pushplusCallbackUrl').value.trim();
+                params.pushplusTo = document.getElementById('pushplusTo').value.trim();
+            } else if (type === 'serverchan') {
+                params.pushKey = document.getElementById('pushKey').value.trim();
+                if (!params.pushKey) {
+                    alert('请输入Server酱SendKey');
+                    return;
+                }
+            }
+            
+            const config = {
+                type: type,
+                params: params,
+                title: document.getElementById('notifyTitle').value,
+                subtitle: document.getElementById('notifySubtitle').value,
+                content: document.getElementById('notifyContent').value,
+                threshold: parseInt(document.getElementById('notifyThreshold').value) || 0,
+                queryInterval: parseInt(document.getElementById('configInterval').value) || 0
+            };
+            
+            // 保存到服务器
+            try {
+                console.log('准备保存配置:', config);
+                const response = await fetch(`../api/notify.php?token=${accessToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                console.log('响应状态:', response.status, response.statusText);
+                const responseText = await response.text();
+                console.log('响应内容:', responseText);
+                
+                const result = JSON.parse(responseText);
+                if (result.success) {
+                    notifyConfig = config;
+                    
+                    // 如果配置了通知，询问是否测试
+                    if (config.type) {
+                        if (confirm('配置已保存！是否发送测试通知？')) {
+                            await sendTestNotify();
+                        } else {
+                            closeNotifyModal();
+                        }
+                    } else {
+                        closeNotifyModal();
+                        alert('通知配置已保存');
+                    }
+                } else {
+                    alert('保存失败：' + result.message);
+                }
+            } catch (e) {
+                console.error('保存配置错误:', e);
+                alert('保存失败：' + e.message + '\n请查看浏览器控制台获取详细信息');
+            }
+        }
+
+        // 发送测试通知
+        async function sendTestNotify() {
+            if (!notifyConfig || !notifyConfig.type) {
+                alert('请先配置通知方式');
+                return;
+            }
+            
+            // 过滤掉空参数
+            const cleanParams = {};
+            for (const key in notifyConfig.params) {
+                if (notifyConfig.params[key] !== '' && notifyConfig.params[key] !== null && notifyConfig.params[key] !== undefined) {
+                    cleanParams[key] = notifyConfig.params[key];
+                }
+            }
+            
+            const testContent = '这是一条测试通知\n\n配置正常，通知功能已启用！';
+            
+            try {
+                const response = await fetch('../api/notify.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: notifyConfig.type,
+                        params: cleanParams,
+                        title: '流量监控测试通知',
+                        subtitle: '测试',
+                        content: testContent
+                    })
+                });
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('Response error:', text);
+                    alert('测试通知发送失败：HTTP ' + response.status + '\n' + text);
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('测试通知发送成功！请检查您的设备');
+                    closeNotifyModal();
+                } else {
+                    alert('测试通知发送失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('发送测试通知异常:', error);
+                alert('发送测试通知时出错：' + error.message);
+            }
+        }
+
+        // 重置统计周期
+        async function resetStats() {
+            if (!confirm('确定要重置累计用量吗？\n\n这将：\n• 重置所有流量桶的"用量"为0\n• 保留"今日用量"统计\n\n下次查询将从当前流量重新开始累计。')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`../api/system.php?token=${accessToken}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'reset_stats', token: accessToken })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('重置成功！\n\n• 累计用量已清零\n• 今日用量已保留\n\n页面即将刷新...');
+                    location.reload();
+                } else {
+                    alert('重置失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('❌ 重置失败:', error);
+                alert('重置失败：' + error.message);
+            }
+        }
+        // 确保函数在全局作用域可访问
+        window.resetStats = resetStats;
+
+        // 检查并发送流量通知（后端已处理，前端保留用于兼容）
+        async function checkAndNotify(data) {
+            // 后端已经处理了通知逻辑，前端不需要再处理
+            return { success: true, sent: false, reason: 'handled_by_backend' };
+        }
+
+        // 构建占位符数据（保留用于兼容）
+        function buildPlaceholders(data, diffStats, lastStats) {
+            const placeholders = {};
+            
+            // 基础信息
+            placeholders['[套餐]'] = data.mainPackage || '未知套餐';
+            placeholders['[时长]'] = calculateTimeIntervalFromTimestamp(data.stats_start_time);
+            placeholders['[时间]'] = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+            
+            // 流量桶占位符
+            const bucketNames = {
+                'common_limited': '通用有限',
+                'common_unlimited': '通用不限',
+                'regional_limited': '区域有限',
+                'regional_unlimited': '区域不限',
+                'targeted_limited': '免流有限',
+                'targeted_unlimited': '免流不限',
+                '所有通用': '所有通用',
+                '所有免流': '所有免流',
+                '所有流量': '所有流量'
+            };
+            
+            Object.keys(bucketNames).forEach(key => {
+                const bucket = data.buckets[key] || { total: 0, used: 0, remain: 0 };
+                const diff = diffStats[key] || { used: 0, today: 0 };
+                const name = bucketNames[key];
+                
+                placeholders[`[${name}.总量]`] = formatFlow(bucket.total);
+                placeholders[`[${name}.已用]`] = formatFlow(bucket.used);
+                placeholders[`[${name}.剩余]`] = (bucket.total === 0 || bucket.total >= 999999) ? '无限' : formatFlow(bucket.remain);
+                placeholders[`[${name}.用量]`] = formatFlow(diff.used);
+                placeholders[`[${name}.今日用量]`] = formatFlow(diff.today);
+            });
+            
+            return placeholders;
+        }
+
+        // 应用占位符替换
+        function applyPlaceholders(text, placeholders) {
+            let result = text;
+            Object.entries(placeholders).forEach(([key, val]) => {
+                const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                result = result.replace(new RegExp(escapedKey, 'g'), val);
+            });
+            return result;
+        }
+
+        // 从时间戳计算时长
+        function calculateTimeIntervalFromTimestamp(timestamp) {
+            if (!timestamp) return '首次运行';
+            
+            // 支持ISO 8601格式字符串和毫秒时间戳
+            const startTime = typeof timestamp === 'string' ? new Date(timestamp).getTime() : timestamp;
+            const now = Date.now();
+            const diffMs = now - startTime;
+            
+            const minutes = Math.floor(diffMs / (1000 * 60));
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+            
+            if (days > 0) return `${days}天${hours % 24}小时`;
+            if (hours > 0) return `${hours}小时${minutes % 60}分钟`;
+            return `${minutes}分钟`;
+        }
+
+        // 加载通知配置
+        async function loadNotifyConfig() {
+            try {
+                const response = await fetch(`../api/notify.php?token=${accessToken}`);
+                const result = await response.json();
+                if (result.success && result.data) {
+                    notifyConfig = result.data;
+                }
+            } catch (e) {
+                console.error('加载通知配置失败:', e);
+            }
+        }
+
+        // 刷新数据
+        function refreshData() {
+            if (isRefreshing) return;
+            fetchData();
+        }
+
+        // 获取数据
+        async function fetchData() {
+            if (isRefreshing) return;
+            
+            isRefreshing = true;
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<span>⏳</span>';
+            }
+
+            // 显示加载动画和流式步骤
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingSteps = document.getElementById('loadingSteps');
+            loadingOverlay.classList.remove('hidden');
+            loadingSteps.style.display = 'block';
+            
+            // 隐藏所有内容
+            document.getElementById('header').style.display = 'none';
+            document.getElementById('errorCard').style.display = 'none';
+            document.getElementById('summaryCard').style.display = 'none';
+            document.getElementById('bucketsContainer').innerHTML = '';
+            document.getElementById('packagesContainer').innerHTML = '';
+
+            // 重置所有步骤状态
+            document.querySelectorAll('.loading-step').forEach(step => {
+                step.classList.remove('active', 'completed');
+                const icon = step.querySelector('.step-icon');
+                icon.classList.remove('active', 'completed', 'error');
+                icon.classList.add('pending');
+                icon.innerHTML = icon.textContent.charAt(0); // 恢复原始图标
+            });
+
+            try {
+                // 步骤1: 初始化
+                await updateLoadingStep('init', 'active');
+                await sleep(300);
+                await updateLoadingStep('init', 'completed');
+
+                // 步骤2: 验证身份
+                await updateLoadingStep('auth', 'active');
+                await sleep(400);
+                await updateLoadingStep('auth', 'completed');
+
+                // 步骤3: 获取cookie（这一步可能需要较长时间）
+                await updateLoadingStep('cookie', 'active');
+                
+                // 步骤4: 查询数据
+                await updateLoadingStep('query', 'active');
+                
+                // 使用新的query.php，它会自动处理通知和stats保存
+                const response = await fetch(`../api/query.php?token=${accessToken}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    await updateLoadingStep('cookie', 'completed');
+                    await updateLoadingStep('query', 'completed');
+
+                    // 步骤5: 处理数据
+                    await updateLoadingStep('process', 'active');
+                    await sleep(300);
+                    await updateLoadingStep('process', 'completed');
+
+                    // 步骤6: 完成
+                    await updateLoadingStep('complete', 'active');
+                    await sleep(200);
+                    await updateLoadingStep('complete', 'completed');
+
+                    // 隐藏加载动画
+                    setTimeout(() => {
+                        loadingOverlay.classList.add('hidden');
+                        loadingSteps.style.display = 'none';
+                    }, 500);
+
+                    // 渲染界面（数据已包含diff）
+                    renderData(result.data);
+                } else {
+                    // 查询失败，标记当前步骤为错误
+                    const currentStep = document.querySelector('.loading-step.active');
+                    if (currentStep) {
+                        const icon = currentStep.querySelector('.step-icon');
+                        icon.classList.remove('active');
+                        icon.classList.add('error');
+                        icon.innerHTML = '❌';
+                    }
+                    
+                    await sleep(1000);
+                    loadingOverlay.classList.add('hidden');
+                    loadingSteps.style.display = 'none';
+                    showError(result.message || result.error || '查询失败，请稍后重试');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                
+                // 标记当前活动步骤为错误
+                const currentStep = document.querySelector('.loading-step.active');
+                if (currentStep) {
+                    const icon = currentStep.querySelector('.step-icon');
+                    icon.classList.remove('active');
+                    icon.classList.add('error');
+                    icon.innerHTML = '❌';
+                }
+                
+                await sleep(1000);
+                loadingOverlay.classList.add('hidden');
+                loadingSteps.style.display = 'none';
+                showError('网络错误：' + error.message);
+            } finally {
+                isRefreshing = false;
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<span>🔄</span>';
+                }
+            }
+        }
+
+        // 更新加载步骤状态
+        async function updateLoadingStep(stepName, status) {
+            const step = document.querySelector(`.loading-step[data-step="${stepName}"]`);
+            if (!step) return;
+
+            const icon = step.querySelector('.step-icon');
+            
+            if (status === 'active') {
+                step.classList.add('active');
+                icon.classList.remove('pending', 'completed', 'error');
+                icon.classList.add('active');
+                icon.innerHTML = '<div class="step-spinner"></div>';
+            } else if (status === 'completed') {
+                step.classList.remove('active');
+                step.classList.add('completed');
+                icon.classList.remove('active', 'pending');
+                icon.classList.add('completed');
+                icon.innerHTML = '✓';
+            } else if (status === 'error') {
+                step.classList.remove('active');
+                icon.classList.remove('active', 'pending');
+                icon.classList.add('error');
+                icon.innerHTML = '✗';
+            }
+        }
+
+        // 辅助函数：延迟
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 查询余额
+        async function fetchBalance() {
+            try {
+                const response = await fetch(`../api/query.php?token=${accessToken}&type=balance`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('balanceAmount').textContent = result.data.balance;
+                    document.getElementById('monthlyFee').textContent = result.data.monthlyFee;
+                } else {
+                    console.error('余额查询失败:', result.message);
+                    // 显示默认值
+                    document.getElementById('balanceAmount').textContent = '--';
+                    document.getElementById('monthlyFee').textContent = '--';
+                }
+            } catch (error) {
+                console.error('余额查询异常:', error);
+                document.getElementById('balanceAmount').textContent = '--';
+                document.getElementById('monthlyFee').textContent = '--';
+            }
+        }
+        
+        // 刷新余额（独立刷新，不刷新流量）
+        function refreshBalance() {
+            fetchBalance();
+        }
+
+        // 显示错误
+        function showError(message) {
+            document.getElementById('errorCard').style.display = 'block';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        // 渲染数据
+        function renderData(data) {
+            // 显示头部
+            document.getElementById('header').style.display = 'block';
+            
+            // 设置套餐名称和手机号（隐藏中间4位）
+            document.getElementById('packageName').textContent = data.mainPackage || '中国联通';
+            document.getElementById('mobileNumber').textContent = maskMobile(data.mobile);
+            
+            // 更新时间
+            const now = new Date();
+            const timeStr = now.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).replace(/\//g, '-');
+            document.getElementById('updateTime').textContent = '查询时间：' + timeStr;
+
+            // 显示双栏流量汇总 -> 改为横向滑动的流量桶
+            if (data.buckets && data.diff) {
+                document.getElementById('summaryCard').style.display = 'block';
+                
+                // 生成横向滑动的流量桶小卡片
+                renderBucketMiniCards(data.buckets, data.diff);
+                
+                // 计算时长（直接使用API返回的stats_start_time）
+                const timeIntervalEl = document.getElementById('timeInterval');
+                if (data.stats_start_time) {
+                    const result = calculateTimeIntervalFromTimestamp(data.stats_start_time);
+                    timeIntervalEl.textContent = result;
+                } else {
+                    timeIntervalEl.textContent = '首次运行';
+                }
+            }
+
+            // 不再渲染独立的流量桶卡片（已整合到summaryCard中）
+            // renderBuckets(data.buckets, data.diff);
+
+            // 渲染流量包
+            renderPackages(data.packages);
+            
+            // 查询余额（异步，不阻塞主流程）
+            fetchBalance();
+        }
+
+        // 渲染横向滑动的流量桶小卡片
+        function renderBucketMiniCards(buckets, diff) {
+            if (!buckets) return;
+
+            const wrapper = document.getElementById('bucketScrollWrapper');
+            wrapper.innerHTML = '';
+
+            // 桶名称映射和显示顺序
+            const bucketConfig = [
+                { key: '所有通用', name: '📱 所有通用', class: '' },
+                { key: '所有免流', name: '🎯 所有免流', class: 'targeted' },
+                { key: 'common_limited', name: '通用有限', class: '' },
+                { key: 'common_unlimited', name: '通用不限', class: '' },
+                { key: 'regional_limited', name: '区域有限', class: 'regional' },
+                { key: 'regional_unlimited', name: '区域不限', class: 'regional' },
+                { key: 'targeted_limited', name: '免流有限', class: 'targeted' },
+                { key: 'targeted_unlimited', name: '免流不限', class: 'targeted' }
+            ];
+
+            bucketConfig.forEach(config => {
+                const bucket = buckets[config.key];
+                if (!bucket) return;
+                
+                // 只显示有数据的桶
+                if (bucket.total === 0 && bucket.used === 0 && bucket.remain === 0) return;
+                
+                const diffData = diff && diff[config.key] ? diff[config.key] : { used: 0, today: 0 };
+                
+                const card = document.createElement('div');
+                card.className = `bucket-mini-card ${config.class}`;
+                
+                const isUnlimited = bucket.total >= 999999 || config.key.includes('unlimited');
+                
+                card.innerHTML = `
+                    <div class="bucket-mini-name">${config.name}</div>
+                    <div class="bucket-mini-used">本次: ${formatFlow(diffData.used)}</div>
+                    <div class="bucket-mini-detail">
+                        <div>📆 今日: ${formatFlow(diffData.today)}</div>
+                        <div>💾 已用: ${formatFlow(bucket.used)}</div>
+                        <div>📦 剩余: ${isUnlimited ? '无限' : formatFlow(bucket.remain)}</div>
+                    </div>
+                `;
+                
+                wrapper.appendChild(card);
+            });
+        }
+
+        // 渲染流量桶（保留原函数但不再使用）
+        function renderBuckets(buckets, diff) {
+            if (!buckets) return;
+
+            const container = document.getElementById('bucketsContainer');
+            container.innerHTML = '';
+
+            // 桶名称映射（与原项目保持一致）
+            const bucketNames = {
+                'common_limited': '通用有限',
+                'common_unlimited': '通用不限',
+                'regional_limited': '区域有限',
+                'regional_unlimited': '区域不限',
+                'targeted_limited': '免流有限',
+                'targeted_unlimited': '免流不限'
+            };
+
+            // 定义显示顺序（只显示基础桶，不显示聚合桶）
+            const order = ['common_limited', 'common_unlimited', 'regional_limited', 'regional_unlimited', 'targeted_limited', 'targeted_unlimited'];
+            
+            order.forEach(key => {
+                const bucket = buckets[key];
+                if (!bucket) return;
+                
+                // 只显示有数据的桶
+                if (bucket.total === 0 && bucket.used === 0 && bucket.remain === 0) return;
+                
+                const name = bucketNames[key];
+                const diffData = diff && diff[key] ? diff[key] : { used: 0, today: 0 };
+                
+                const card = document.createElement('div');
+                card.className = 'flow-card fade-in';
+                
+                const percent = bucket.total > 0 ? ((bucket.used / bucket.total) * 100).toFixed(1) : 0;
+                const isUnlimited = bucket.total >= 999999 || key.includes('unlimited');
+                
+                card.innerHTML = `
+                    <div class="flow-header">
+                        <div class="flow-name">${name}</div>
+                        <div class="flow-percent">${isUnlimited ? '不限量' : percent + '%'}</div>
+                    </div>
+                    <div class="flow-stats">
+                        <span>已用 ${formatFlow(bucket.used)}</span>
+                        ${!isUnlimited ? '<span>剩余 ' + formatFlow(bucket.remain) + '</span>' : '<span>无限流量</span>'}
+                    </div>
+                    ${!isUnlimited ? `<div class="flow-bar">
+                        <div class="flow-bar-fill" style="width: ${Math.min(percent, 100)}%"></div>
+                    </div>` : ''}
+                    <div class="flow-detail">
+                        <span>本次使用: ${formatFlow(diffData.used)}</span>
+                        <span>今日使用: ${formatFlow(diffData.today)}</span>
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            });
+        }
+
+        // 渲染流量包（进度条样式）
+        function renderPackages(packages) {
+            if (!packages || packages.length === 0) return;
+
+            const container = document.getElementById('packagesContainer');
+            container.innerHTML = '';
+
+            // 分离公免流量包和普通流量包
+            const publicFreePackages = [];
+            const normalPackages = [];
+            packages.forEach(pkg => {
+                if (pkg.isPublicFree) {
+                    publicFreePackages.push(pkg);
+                } else {
+                    normalPackages.push(pkg);
+                }
+            });
+
+            // 先渲染普通流量包
+            let pkgIndex = 0;
+            normalPackages.forEach(pkg => {
+                const card = document.createElement('div');
+                card.className = 'package-card fade-in';
+                
+                const isUnlimited = pkg.total >= 999999 || pkg.total === 0;
+                const isFree = pkg.isPublicFree;
+                const percent = (isUnlimited || pkg.total === 0) ? 0 : ((pkg.used / pkg.total) * 100).toFixed(1);
+                
+                // 处理主副卡信息（默认收起）
+                let viceHtml = '';
+                if (pkg.viceCardlist && pkg.viceCardlist.length > 0) {
+                    const viceId = `vice-${pkgIndex}`;
+                    viceHtml = `<div class="vice-card">
+                        <div class="vice-title" onclick="toggleViceCard('${viceId}')">
+                            🔗 主副卡使用详情
+                            <span class="vice-toggle collapsed" id="${viceId}-toggle">▼</span>
+                        </div>
+                        <div class="vice-content collapsed" id="${viceId}-content">`;
+                    pkg.viceCardlist.forEach(vice => {
+                        const isCurrent = vice.currentLoginFlag === '1';
+                        const isVice = vice.viceCardflag === '1';
+                        viceHtml += `<div class="vice-item">
+                            <div>
+                                <span class="vice-number">${vice.usernumber}</span>
+                                ${isCurrent ? '<span class="vice-current">（当前登录）</span>' : ''}
+                                ${isVice ? '<span style="color: #999; font-size: 11px;">（副卡）</span>' : '<span style="color: #999; font-size: 11px;">（主卡）</span>'}
+                            </div>
+                            <span class="vice-usage">${formatFlow(parseFloat(vice.use))}</span>
+                        </div>`;
+                    });
+                    viceHtml += '</div></div>';
+                }
+                pkgIndex++;
+                
+                // 处理到期时间（作为内联元素显示）
+                let expireText = '';
+                if (pkg.endDate && pkg.endDate !== '长期有效') {
+                    expireText = `⏰ ${pkg.endDate}`;
+                } else if (pkg.endDate === '长期有效') {
+                    expireText = `✓ 长期有效`;
+                }
+                
+                card.innerHTML = `
+                    <div class="package-header">
+                        <div class="package-name">${pkg.name}</div>
+                        ${isFree ? '<span class="package-badge">免费</span>' : ''}
+                        ${isUnlimited ? '<span class="package-badge" style="background: #ff9800;">不限量</span>' : ''}
+                    </div>
+                    <div class="package-info">
+                        <span class="package-used">${formatFlow(pkg.used)} / ${isUnlimited ? '∞' : formatFlow(pkg.total)}</span>
+                        <span class="package-percent">${isUnlimited ? '不限量' : percent + '%'}</span>
+                    </div>
+                    ${!isUnlimited ? `<div class="package-bar">
+                        <div class="package-bar-fill" style="width: ${Math.min(percent, 100)}%"></div>
+                    </div>` : ''}
+                    <div class="package-detail">
+                        <span>剩余 ${isUnlimited ? '∞' : formatFlow(pkg.remain)}</span>
+                        <span style="color: ${pkg.endDate === '长期有效' ? '#4caf50' : '#ff9800'}; font-size: 11px; font-weight: 500;">${expireText || (pkg.isPublicFree ? '公免流量' : '已订购')}</span>
+                    </div>
+                    ${viceHtml}
+                `;
+                
+                container.appendChild(card);
+            });
+
+            // 最后渲染公免流量合并卡片
+            if (publicFreePackages.length > 0) {
+                const publicFreeCard = document.createElement('div');
+                publicFreeCard.className = 'package-card fade-in';
+                
+                // 计算公免流量总和
+                let publicFreeTotal = 0;
+                let publicFreeUsed = 0;
+                let publicFreeRemain = 0;
+                publicFreePackages.forEach(pkg => {
+                    publicFreeUsed += pkg.used;
+                    publicFreeTotal += pkg.total;
+                    publicFreeRemain += pkg.remain;
+                });
+                
+                const isUnlimited = publicFreeTotal >= 999999 || publicFreeTotal === 0;
+                const percent = (isUnlimited || publicFreeTotal === 0) ? 0 : ((publicFreeUsed / publicFreeTotal) * 100).toFixed(1);
+                
+                // 生成各个公免流量包的详情列表
+                let detailsHtml = '<div class="vice-card"><div class="vice-title">🎁 公免流量详情</div>';
+                publicFreePackages.forEach(pkg => {
+                    const pkgPercent = (pkg.total === 0 || pkg.total >= 999999) ? 0 : ((pkg.used / pkg.total) * 100).toFixed(1);
+                    detailsHtml += `<div class="vice-item">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500; color: #333; margin-bottom: 4px;">${pkg.name}</div>
+                            <div style="font-size: 11px; color: #999;">已用 ${formatFlow(pkg.used)} / ${pkg.total === 0 || pkg.total >= 999999 ? '∞' : formatFlow(pkg.total)}</div>
+                        </div>
+                        <span class="vice-usage">${(pkg.total === 0 || pkg.total >= 999999) ? '不限量' : pkgPercent + '%'}</span>
+                    </div>`;
+                });
+                detailsHtml += '</div>';
+                
+                publicFreeCard.innerHTML = `
+                    <div class="package-header">
+                        <div class="package-name">公免流量</div>
+                        <span class="package-badge">免费</span>
+                        ${isUnlimited ? '<span class="package-badge" style="background: #ff9800;">不限量</span>' : ''}
+                    </div>
+                    <div class="package-info">
+                        <span class="package-used">${formatFlow(publicFreeUsed)} / ${isUnlimited ? '∞' : formatFlow(publicFreeTotal)}</span>
+                        <span class="package-percent">${isUnlimited ? '不限量' : percent + '%'}</span>
+                    </div>
+                    ${!isUnlimited ? `<div class="package-bar">
+                        <div class="package-bar-fill" style="width: ${Math.min(percent, 100)}%"></div>
+                    </div>` : ''}
+                    <div class="package-detail">
+                        <span>剩余 ${isUnlimited ? '∞' : formatFlow(publicFreeRemain)}</span>
+                        <span>${publicFreePackages.length} 个公免包</span>
+                    </div>
+                    ${detailsHtml}
+                `;
+                container.appendChild(publicFreeCard);
+            }
+        }
+
+        // 格式化流量
+        function formatFlow(mb) {
+            if (mb === null || mb === undefined || isNaN(mb)) return '0MB';
+            
+            const num = parseFloat(mb);
+            
+            if (num >= 1024 * 1024) {
+                return (num / 1024 / 1024).toFixed(2) + 'TB';
+            } else if (num >= 1024) {
+                return (num / 1024).toFixed(2) + 'GB';
+            } else if (num >= 1) {
+                return num.toFixed(2) + 'MB';
+            } else if (num > 0) {
+                return (num * 1024).toFixed(2) + 'KB';
+            } else {
+                return '0MB';
+            }
+        }
+
+        // 隐藏手机号第4-11位
+        function maskMobile(mobile) {
+            if (!mobile || mobile.length !== 11) {
+                return mobile || '未知号码';
+            }
+            // 将第4-11位（索引3-10）替换为 ********
+            return mobile.substring(0, 3) + '********';
+        }
+
+        // 切换主副卡信息展开/收起
+        function toggleViceCard(viceId) {
+            const content = document.getElementById(`${viceId}-content`);
+            const toggle = document.getElementById(`${viceId}-toggle`);
+            
+            if (content && toggle) {
+                content.classList.toggle('collapsed');
+                toggle.classList.toggle('collapsed');
+            }
+        }
+        
+        // 确保函数在全局作用域可访问
+        window.toggleViceCard = toggleViceCard;
+
+        // 计算时长间隔
+        function calculateTimeInterval(lastTimestamp) {
+            if (!lastTimestamp) return '首次运行';
+            
+            const now = Date.now();
+            const last = lastTimestamp * 1000; // 转换为毫秒
+            const diffMs = now - last;
+            
+            if (diffMs < 0) return '时间异常';
+            
+            const minutes = Math.floor(diffMs / (1000 * 60));
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+            
+            if (days > 0) {
+                return `${days}天${hours % 24}小时`;
+            } else if (hours > 0) {
+                return `${hours}小时${minutes % 60}分钟`;
+            } else if (minutes > 0) {
+                return `${minutes}分钟`;
+            } else {
+                return '刚刚';
+            }
+        }
+
+        // 自动刷新（可选，默认关闭）
+        // setInterval(fetchData, 5 * 60 * 1000); // 每5分钟自动刷新
+    </script>
+</body>
+</html>
