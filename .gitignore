@@ -1,0 +1,55 @@
+# 用户数据目录# 数据库文件
+
+data/*data/*.db
+
+!data/.gitkeepdata/*.db-*
+
+
+
+# 日志文件# 缓存和临时文件
+
+logs/*data/rate_limit_*.tmp
+
+!logs/.gitkeepdata/*.log
+
+storage/logs/*
+
+!storage/logs/.gitkeep# 敏感配置
+
+*.env
+
+# 数据库文件.env.*
+
+*.db
+
+*.sqlite# IDE
+
+.vscode/
+
+# 临时文件.idea/
+
+*.tmp*.swp
+
+*.bak*.swo
+
+*~*~
+
+.DS_Store
+
+# 系统文件
+
+# IDE文件.DS_Store
+
+.vscode/Thumbs.db
+
+.idea/
+
+# 日志
+
+# 环境配置*.log
+
+.envlogs/
+
+box/
+sbmanger/
+sing-box-patch/

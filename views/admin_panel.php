@@ -1,0 +1,1975 @@
+<?php
+// 防止直接访问HTML源码
+header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理面板 - 联通流量监控</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .user-info {
+            font-size: 14px;
+        }
+        
+        .btn-logout {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .btn-logout:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-header h2 {
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-secondary {
+            background: #e0e7ff;
+            color: #667eea;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px; /* 设置最小宽度，确保表格内容完整显示 */
+        }
+        
+        /* 表格容器支持横向滚动 */
+        #userTableContainer,
+        #codeTableContainer,
+        #adminTableContainer,
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* iOS平滑滚动 */
+            margin: 0 -20px; /* 负边距让滚动延伸到卡片边缘 */
+            padding: 0 20px; /* 恢复内边距 */
+        }
+        
+        /* 滚动条样式优化 */
+        #userTableContainer::-webkit-scrollbar,
+        #codeTableContainer::-webkit-scrollbar,
+        #adminTableContainer::-webkit-scrollbar,
+        .table-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        #userTableContainer::-webkit-scrollbar-track,
+        #codeTableContainer::-webkit-scrollbar-track,
+        #adminTableContainer::-webkit-scrollbar-track,
+        .table-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #userTableContainer::-webkit-scrollbar-thumb,
+        #codeTableContainer::-webkit-scrollbar-thumb,
+        #adminTableContainer::-webkit-scrollbar-thumb,
+        .table-scroll::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        #userTableContainer::-webkit-scrollbar-thumb:hover,
+        #codeTableContainer::-webkit-scrollbar-thumb:hover,
+        #adminTableContainer::-webkit-scrollbar-thumb:hover,
+        .table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        td {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-success {
+            background: #d1f4e0;
+            color: #0d894f;
+        }
+        
+        .badge-danger {
+            background: #fee;
+            color: #c33;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .btn-small:hover {
+            opacity: 0.8;
+        }
+        
+        .btn-edit {
+            background: #e0e7ff;
+            color: #667eea;
+        }
+        
+        .btn-delete {
+            background: #fee;
+            color: #c33;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h3 {
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .close {
+            font-size: 24px;
+            color: #999;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 6px;
+        }
+        
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        /* 标签页样式 */
+        .admin-tab {
+            flex: 1;
+            padding: 16px 20px;
+            border: none;
+            background: none;
+            color: #999;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .admin-tab:hover {
+            color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .admin-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .admin-tab span:first-child {
+            font-size: 20px;
+        }
+        
+        .tab-content {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span>📱</span>
+            联通流量监控管理面板
+        </h1>
+        <div class="header-right">
+            <div class="user-info">
+                欢迎，<strong id="adminUsername">管理员</strong>
+            </div>
+            <button class="btn-logout" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">总用户数</div>
+                <div class="stat-value" id="totalUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">活跃用户</div>
+                <div class="stat-value" id="activeUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">今日查询</div>
+                <div class="stat-value" id="todayQueries">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">系统状态</div>
+                <div class="stat-value" style="font-size: 24px; color: #0d894f;">运行中</div>
+            </div>
+        </div>
+        
+        <!-- 标签页导航 -->
+        <div style="background: white; border-radius: 12px; padding: 0; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden;">
+            <div style="display: flex; border-bottom: 2px solid #f0f0f0;">
+                <button class="admin-tab active" onclick="switchAdminTab('users')" id="tabUsers">
+                    <span>👥</span>
+                    <span>用户管理</span>
+                </button>
+                <button class="admin-tab" onclick="switchAdminTab('activation')" id="tabActivation">
+                    <span>🎫</span>
+                    <span>激活码</span>
+                </button>
+                <button class="admin-tab" onclick="switchAdminTab('admins')" id="tabAdmins">
+                    <span>👨‍💼</span>
+                    <span>管理员</span>
+                </button>
+                <button class="admin-tab" onclick="switchAdminTab('settings')" id="tabSettings">
+                    <span>⚙️</span>
+                    <span>网站设置</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 用户管理标签页 -->
+        <div id="usersTab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <h2>用户管理</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn" onclick="showSystemCheck()" style="background: #ff9800;">🔍 系统自检</button>
+                    <button class="btn" onclick="showAddUserModal()">➕ 添加用户</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="userTableLoading" class="loading">
+                    加载中...
+                </div>
+                <div id="userTableContainer" style="display: none;">
+                    <table id="userTable">
+                        <thead>
+                            <tr>
+                                <th>手机号</th>
+                                <th>认证类型</th>
+                                <th>访问Token</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>备注</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="userTableEmpty" class="empty" style="display: none;">
+                    暂无用户数据
+                </div>
+            </div>
+        </div>
+        </div>
+        </div>
+        <!-- 用户管理标签页结束 -->
+        
+        <!-- 激活码管理标签页 -->
+        <div id="activationTab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>激活码管理</h2>
+                    <button class="btn" onclick="showGenerateCodeModal()">➕ 生成激活码</button>
+                </div>
+                <div class="card-body">
+                    <!-- 统计卡片 -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+                        <div style="background: #f8f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">总激活码</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #667eea;" id="codeTotal">0</div>
+                        </div>
+                        <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">未使用</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #4caf50;" id="codeUnused">0</div>
+                        </div>
+                        <div style="background: #fff3e0; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">已使用</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #ff9800;" id="codeUsed">0</div>
+                        </div>
+                        <div style="background: #ffebee; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">已过期</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #f56c6c;" id="codeExpired">0</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px; display: flex; gap: 10px;">
+                        <button class="btn-small" onclick="deleteSelectedCodes()" style="background: #f56c6c; color: white;">🗑️ 删除选中</button>
+                        <button class="btn-small" onclick="exportCodes()" style="background: #4caf50; color: white;">📥 导出激活码</button>
+                    </div>
+                    
+                    <div id="codeTableContainer">
+                        <table id="codeTable">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" onclick="toggleAllCodes(this)"></th>
+                                    <th>激活码</th>
+                                    <th>状态</th>
+                                    <th>使用者</th>
+                                    <th>创建时间</th>
+                                    <th>使用时间</th>
+                                    <th>备注</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="codeTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 激活码标签页结束 -->
+        
+        <!-- 管理员管理标签页 -->
+        <div id="adminsTab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>管理员管理</h2>
+                </div>
+                <div class="card-body">
+                    <div id="adminTableContainer">
+                        <table id="adminTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 管理员标签页结束 -->
+        
+        <!-- 网站设置标签页 -->
+        <div id="settingsTab" class="tab-content" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>网站设置</h2>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label class="form-label">运营模式</label>
+                        <select class="form-select" id="siteMode" onchange="updateSiteMode()" style="max-width: 300px;">
+                            <option value="public">公开注册</option>
+                            <option value="private">私有模式</option>
+                        </select>
+                        <div class="form-hint">
+                            公开模式：任何人都可以注册添加用户（标记为公测用户）<br>
+                            私有模式：只有持有激活码的人才能添加用户（标记为激活码用户）
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 30px; padding: 20px; background: #f8f9ff; border-radius: 8px;">
+                        <h3 style="margin-bottom: 15px; color: #667eea;">💡 使用说明</h3>
+                        <ul style="line-height: 2; color: #666;">
+                            <li><strong>公开注册模式：</strong>适合内测阶段，所有用户标记为"公测用户"</li>
+                            <li><strong>私有模式：</strong>适合正式运营，使用由管理员生成的卡密来激活，用户标记为"激活码用户"</li>
+                            <li>可以随时切换模式，已有用户的标记不会改变</li>
+                            <li>建议：内测期使用公开模式，正式上线后切换到私有模式</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 网站设置标签页结束 -->
+    </div>
+    
+    <!-- 生成激活码模态框 -->
+    <div class="modal" id="generateCodeModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>生成激活码</h3>
+                <button class="close" onclick="closeGenerateCodeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">生成数量 *</label>
+                    <input type="number" class="form-input" id="generateCount" value="1" min="1" max="100">
+                    <div class="form-hint">一次最多生成100个激活码</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <input type="text" class="form-input" id="generateRemark" placeholder="可选，用于标识这批激活码的用途">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGenerateCodeModal()">取消</button>
+                <button class="btn" onclick="generateCodes()">生成</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 修改管理员用户名模态框 -->
+    <div class="modal" id="editAdminUsernameModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>修改用户名</h3>
+                <button class="close" onclick="closeEditAdminUsernameModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editAdminId">
+                <div class="form-group">
+                    <label class="form-label">新用户名 *</label>
+                    <input type="text" class="form-input" id="editAdminUsername" placeholder="3-20个字符">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditAdminUsernameModal()">取消</button>
+                <button class="btn" onclick="saveAdminUsername()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 修改管理员密码模态框 -->
+    <div class="modal" id="editAdminPasswordModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>修改密码</h3>
+                <button class="close" onclick="closeEditAdminPasswordModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editPasswordAdminId">
+                <div class="form-group">
+                    <label class="form-label">新密码 *</label>
+                    <input type="password" class="form-input" id="editAdminPassword" placeholder="至少6个字符">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">确认密码 *</label>
+                    <input type="password" class="form-input" id="editAdminPasswordConfirm" placeholder="再次输入新密码">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditAdminPasswordModal()">取消</button>
+                <button class="btn" onclick="saveAdminPassword()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 添加用户模态框 -->
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加用户</h3>
+                <button class="close" onclick="closeAddUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">认证类型 *</label>
+                    <select class="form-select" id="authType" onchange="toggleAuthFields()">
+                        <option value="full">完整认证（手机号+APPID+TOKEN）</option>
+                        <option value="cookie">Cookie认证（手机号+Cookie）</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">手机号 *</label>
+                    <input type="text" class="form-input" id="mobile" placeholder="11位手机号" maxlength="11">
+                    <div class="form-hint">请输入11位手机号</div>
+                </div>
+                
+                <div id="fullAuthFields">
+                    <div class="form-group">
+                        <label class="form-label">APPID *</label>
+                        <input type="text" class="form-input" id="appid" placeholder="联通APPID">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">TOKEN_ONLINE *</label>
+                        <input type="text" class="form-input" id="tokenOnline" placeholder="联通TOKEN">
+                    </div>
+                </div>
+                
+                <div id="cookieAuthFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Cookie *</label>
+                        <textarea class="form-textarea" id="cookie" placeholder="请粘贴完整的Cookie字符串"></textarea>
+                        <div class="form-hint">从浏览器开发者工具中复制Cookie</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <input type="text" class="form-input" id="remark" placeholder="可选，用于标识用户">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeAddUserModal()">取消</button>
+                <button class="btn" onclick="addUser()">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑用户模态框 -->
+    <div class="modal" id="editUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑用户</h3>
+                <button class="close" onclick="closeEditUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editUserId">
+                <input type="hidden" id="editUserToken">
+                
+                <div class="form-group">
+                    <label class="form-label">手机号</label>
+                    <input type="text" class="form-input" id="editMobile" placeholder="11位手机号" readonly style="background-color: #f5f5f5;">
+                    <div class="form-hint">手机号不可修改</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">认证类型 *</label>
+                    <select class="form-select" id="editAuthType" onchange="toggleEditAuthFields()">
+                        <option value="full">完整认证（手机号+APPID+TOKEN）</option>
+                        <option value="cookie">Cookie认证（手机号+Cookie）</option>
+                    </select>
+                </div>
+                
+                <div id="editFullAuthFields">
+                    <div class="form-group">
+                        <label class="form-label">APPID *</label>
+                        <input type="text" class="form-input" id="editAppid" placeholder="联通APPID">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">TOKEN_ONLINE *</label>
+                        <input type="text" class="form-input" id="editTokenOnline" placeholder="联通TOKEN">
+                    </div>
+                </div>
+                
+                <div id="editCookieAuthFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Cookie *</label>
+                        <textarea class="form-textarea" id="editCookie" placeholder="请粘贴完整的Cookie字符串"></textarea>
+                        <div class="form-hint">从浏览器开发者工具中复制Cookie</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <input type="text" class="form-input" id="editRemark" placeholder="可选，用于标识用户">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditUserModal()">取消</button>
+                <button class="btn" onclick="saveUserEdit()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统自检模态框 -->
+    <div class="modal" id="systemCheckModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>🔍 系统自检</h3>
+                <button class="close" onclick="closeSystemCheck()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="checkLoading" style="text-align: center; padding: 20px;">
+                    <div style="font-size: 32px; margin-bottom: 10px;">⏳</div>
+                    <div>正在检测...</div>
+                </div>
+                
+                <div id="checkResult" style="display: none;">
+                    <!-- 健康状态 -->
+                    <div id="healthStatus" style="padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-size: 16px; font-weight: 600;"></div>
+                    
+                    <!-- 统计信息 -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+                        <div style="background: #f8f9ff; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">数据库用户数</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #667eea;" id="statTotalUsers">0</div>
+                        </div>
+                        <div style="background: #f8f9ff; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">数据文件夹数</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #667eea;" id="statTotalFolders">0</div>
+                        </div>
+                        <div style="background: #fff5f5; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">孤立文件夹</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #f56c6c;" id="statOrphanCount">0</div>
+                        </div>
+                        <div style="background: #fff8e6; padding: 15px; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 5px;">缺失文件夹</div>
+                            <div style="font-size: 24px; font-weight: 600; color: #ff9800;" id="statMissingCount">0</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 孤立文件夹列表 -->
+                    <div id="orphanSection" style="display: none; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="color: #f56c6c; margin: 0;">⚠️ 孤立文件夹（有文件夹但无数据库记录）</h4>
+                            <button class="btn-small" onclick="cleanupOrphanFolders()" style="background: #f56c6c; color: white;">🗑️ 清理全部</button>
+                        </div>
+                        <div id="orphanList" style="max-height: 200px; overflow-y: auto; background: #fff5f5; padding: 10px; border-radius: 8px;"></div>
+                    </div>
+                    
+                    <!-- 缺失文件夹列表 -->
+                    <div id="missingSection" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="color: #ff9800; margin: 0;">⚠️ 缺失文件夹（有数据库记录但无文件夹）</h4>
+                            <button class="btn-small" onclick="createMissingFolders()" style="background: #ff9800; color: white;">📁 创建全部</button>
+                        </div>
+                        <div id="missingList" style="max-height: 200px; overflow-y: auto; background: #fff8e6; padding: 10px; border-radius: 8px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSystemCheck()">关闭</button>
+                <button class="btn" onclick="runSystemCheck()">🔄 重新检测</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '../api';
+        let currentAdmin = null;
+        let systemCheckData = null;
+        
+        // 页面加载时检查登录状态
+        window.addEventListener('DOMContentLoaded', async function() {
+            await checkLogin();
+            await loadStats();
+            await loadUsers();
+            await loadSiteSettings(); // 加载网站设置
+        });
+        
+        // 检查登录状态
+        async function checkLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/admin.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'check' })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentAdmin = result.data;
+                    document.getElementById('adminUsername').textContent = result.data.username;
+                } else {
+                    // 未登录，跳转到管理员入口（会自动路由到登录页）
+                    window.location.href = '/admin';
+                }
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+                // 网络错误，也跳转到管理员入口
+                window.location.href = '/admin';
+            }
+        }
+        
+        // 加载统计数据
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/admin.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'stats' })
+                });
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    document.getElementById('totalUsers').textContent = result.data.total_users || 0;
+                    document.getElementById('activeUsers').textContent = result.data.active_users || 0;
+                    document.getElementById('todayQueries').textContent = result.data.today_queries || 0;
+                } else {
+                    console.error('Stats API返回数据异常:', result);
+                    // 设置默认值
+                    document.getElementById('totalUsers').textContent = '0';
+                    document.getElementById('activeUsers').textContent = '0';
+                    document.getElementById('todayQueries').textContent = '0';
+                }
+            } catch (error) {
+                console.error('加载统计数据失败:', error);
+                // 出错时显示0
+                document.getElementById('totalUsers').textContent = '0';
+                document.getElementById('activeUsers').textContent = '0';
+                document.getElementById('todayQueries').textContent = '0';
+            }
+        }
+        
+        // 加载用户列表
+        async function loadUsers() {
+            const loading = document.getElementById('userTableLoading');
+            const container = document.getElementById('userTableContainer');
+            const empty = document.getElementById('userTableEmpty');
+            
+            loading.style.display = 'block';
+            container.style.display = 'none';
+            empty.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/user.php?action=list`);
+                const result = await response.json();
+                
+                loading.style.display = 'none';
+                
+                if (result.success && result.data.length > 0) {
+                    renderUserTable(result.data);
+                    container.style.display = 'block';
+                } else {
+                    empty.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+            }
+        }
+        
+        // 渲染用户表格
+        function renderUserTable(users) {
+            console.log('开始渲染用户表格，用户数量：', users.length);
+            console.log('用户数据：', users);
+            
+            const tbody = document.getElementById('userTableBody');
+            if (!tbody) {
+                console.error('找不到userTableBody元素');
+                return;
+            }
+            
+            try {
+                tbody.innerHTML = users.map(user => {
+                    // 检查必需字段
+                    if (!user.mobile || !user.access_token) {
+                        console.error('用户数据缺少必需字段：', user);
+                        return '';
+                    }
+                    
+                    return `
+                    <tr>
+                        <td>${user.mobile}</td>
+                        <td><span class="badge badge-${user.auth_type === 'full' ? 'success' : 'danger'}">${user.auth_type === 'full' ? '完整认证' : 'Cookie'}</span></td>
+                        <td>
+                            <code>${user.access_token.substring(0, 16)}...</code>
+                            <button class="btn-small btn-edit" onclick="copyToClipboard('${user.access_url}')" title="复制链接">📋</button>
+                            <button class="btn-small" style="background: #10b981; color: white;" onclick="openUserPage('${user.access_url}')" title="访问页面">🔗 访问</button>
+                        </td>
+                        <td><span class="badge badge-${user.is_active ? 'success' : 'danger'}">${user.is_active ? '启用' : '禁用'}</span></td>
+                        <td>${user.created_at}</td>
+                        <td>${user.remark || '-'}</td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn-small btn-edit" onclick="editUser(${user.id}, '${user.mobile}', '${user.auth_type}', ${user.is_active})">✏️ 编辑</button>
+                                <button class="btn-small btn-edit" onclick="toggleUserStatus(${user.id}, ${!user.is_active})">
+                                    ${user.is_active ? '禁用' : '启用'}
+                                </button>
+                                <button class="btn-small btn-delete" onclick="deleteUser(${user.id}, '${user.mobile}')">删除</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                }).join('');
+                
+                console.log('用户表格渲染完成');
+            } catch (error) {
+                console.error('渲染用户表格时出错：', error);
+            }
+        }
+        
+        // 显示添加用户模态框
+        function showAddUserModal() {
+            document.getElementById('addUserModal').classList.add('show');
+        }
+        
+        // 关闭添加用户模态框
+        function closeAddUserModal() {
+            document.getElementById('addUserModal').classList.remove('show');
+            // 清空表单
+            document.getElementById('mobile').value = '';
+            document.getElementById('appid').value = '';
+            document.getElementById('tokenOnline').value = '';
+            document.getElementById('cookie').value = '';
+            document.getElementById('remark').value = '';
+            document.getElementById('authType').value = 'full';
+            toggleAuthFields();
+        }
+        
+        // 切换认证字段
+        function toggleAuthFields() {
+            const authType = document.getElementById('authType').value;
+            document.getElementById('fullAuthFields').style.display = authType === 'full' ? 'block' : 'none';
+            document.getElementById('cookieAuthFields').style.display = authType === 'cookie' ? 'block' : 'none';
+        }
+        
+        // 添加用户
+        async function addUser() {
+            const authType = document.getElementById('authType').value;
+            const mobile = document.getElementById('mobile').value.trim();
+            const remark = document.getElementById('remark').value.trim();
+            
+            if (!mobile || !/^1[3-9]\d{9}$/.test(mobile)) {
+                alert('请输入正确的11位手机号');
+                return;
+            }
+            
+            let data = {
+                action: 'add',
+                auth_type: authType,
+                mobile: mobile,
+                remark: remark
+            };
+            
+            if (authType === 'full') {
+                const appid = document.getElementById('appid').value.trim();
+                const tokenOnline = document.getElementById('tokenOnline').value.trim();
+                
+                if (!appid || !tokenOnline) {
+                    alert('请填写完整的APPID和TOKEN');
+                    return;
+                }
+                
+                data.appid = appid;
+                data.token_online = tokenOnline;
+            } else {
+                const cookie = document.getElementById('cookie').value.trim();
+                
+                if (!cookie) {
+                    alert('请填写Cookie');
+                    return;
+                }
+                
+                data.cookie = cookie;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/user.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('添加成功！');
+                    closeAddUserModal();
+                    await loadUsers();
+                    await loadStats();
+                } else {
+                    alert('添加失败：' + result.message);
+                }
+            } catch (error) {
+                alert('添加失败：' + error.message);
+            }
+        }
+        
+        // 切换用户状态
+        async function toggleUserStatus(userId, active) {
+            try {
+                const response = await fetch(`${API_BASE}/user.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'toggle_status',
+                        user_id: userId,
+                        is_active: active
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    await loadUsers();
+                    await loadStats();
+                } else {
+                    alert('操作失败：' + result.message);
+                }
+            } catch (error) {
+                alert('操作失败：' + error.message);
+            }
+        }
+        
+        // 显示编辑用户模态框
+        // 显示编辑用户模态框
+        async function editUser(userId, mobile, authType, isActive) {
+            // 显示模态框
+            const modal = document.getElementById('editUserModal');
+            
+            if (!modal) {
+                alert('找不到编辑用户模态框');
+                return;
+            }
+            
+            modal.classList.add('show');
+            
+            // 设置基本信息
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editMobile').value = mobile;
+            document.getElementById('editAuthType').value = authType;
+            
+            try {
+                // 加载用户详细信息
+                const users = await loadUsersData();
+                const user = users.find(u => u.id === userId);
+                
+                if (!user) {
+                    alert('未找到用户信息');
+                    closeEditUserModal();
+                    return;
+                }
+                
+                // 保存access_token用于后续更新
+                document.getElementById('editUserToken').value = user.access_token || '';
+                
+                // 设置认证类型并显示对应字段
+                document.getElementById('editAuthType').value = user.auth_type;
+                toggleEditAuthFields();
+                
+                // 填充表单数据
+                if (user.auth_type === 'full') {
+                    document.getElementById('editAppid').value = user.appid || '';
+                    document.getElementById('editTokenOnline').value = user.token_online || '';
+                } else {
+                    document.getElementById('editCookie').value = user.cookie || '';
+                }
+                
+                document.getElementById('editRemark').value = user.remark || '';
+                
+            } catch (error) {
+                console.error('加载用户信息失败:', error);
+                alert('加载用户信息失败：' + error.message);
+                closeEditUserModal();
+            }
+        }
+        
+        // 关闭编辑用户模态框
+        function closeEditUserModal() {
+            document.getElementById('editUserModal').classList.remove('show');
+            // 清空表单
+            document.getElementById('editUserId').value = '';
+            document.getElementById('editUserToken').value = '';
+            document.getElementById('editMobile').value = '';
+            document.getElementById('editAppid').value = '';
+            document.getElementById('editTokenOnline').value = '';
+            document.getElementById('editCookie').value = '';
+            document.getElementById('editRemark').value = '';
+        }
+        
+        // 切换编辑表单的认证字段显示
+        function toggleEditAuthFields() {
+            const authType = document.getElementById('editAuthType').value;
+            const fullFields = document.getElementById('editFullAuthFields');
+            const cookieFields = document.getElementById('editCookieAuthFields');
+            
+            if (authType === 'full') {
+                fullFields.style.display = 'block';
+                cookieFields.style.display = 'none';
+            } else {
+                fullFields.style.display = 'none';
+                cookieFields.style.display = 'block';
+            }
+        }
+        
+        // 保存用户编辑
+        async function saveUserEdit() {
+            const userId = document.getElementById('editUserId').value;
+            const mobile = document.getElementById('editMobile').value;
+            const authType = document.getElementById('editAuthType').value;
+            const accessToken = document.getElementById('editUserToken').value;
+            const remark = document.getElementById('editRemark').value.trim();
+            
+            if (!mobile || !authType) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            const data = {
+                action: 'update',
+                user_id: userId,
+                mobile: mobile,
+                auth_type: authType,
+                remark: remark,
+                access_token: accessToken
+            };
+            
+            // 根据认证类型获取对应字段
+            if (authType === 'full') {
+                const appid = document.getElementById('editAppid').value.trim();
+                const tokenOnline = document.getElementById('editTokenOnline').value.trim();
+                
+                if (!appid || !tokenOnline) {
+                    alert('完整认证需要填写APPID和TOKEN_ONLINE');
+                    return;
+                }
+                
+                data.appid = appid;
+                data.token_online = tokenOnline;
+            } else {
+                const cookie = document.getElementById('editCookie').value.trim();
+                
+                if (!cookie) {
+                    alert('Cookie认证需要填写Cookie');
+                    return;
+                }
+                
+                data.cookie = cookie;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/user.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('更新成功！');
+                    closeEditUserModal();
+                    await loadUsers();
+                    await loadStats();
+                } else {
+                    alert('更新失败：' + result.message);
+                }
+            } catch (error) {
+                alert('更新失败：' + error.message);
+            }
+        }
+        
+        // 辅助函数：加载用户数据（不渲染表格）
+        async function loadUsersData() {
+            const response = await fetch(`${API_BASE}/user.php?action=list`, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || '加载失败');
+            }
+            
+            return result.data || [];
+        }
+        
+        // 删除用户
+        async function deleteUser(userId, mobile) {
+            if (!confirm(`确定要删除用户 ${mobile} 吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/user.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        user_id: userId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('删除成功');
+                    await loadUsers();
+                    await loadStats();
+                } else {
+                    alert('删除失败：' + result.message);
+                }
+            } catch (error) {
+                alert('删除失败：' + error.message);
+            }
+        }
+        
+        // 退出登录
+        async function logout() {
+            try {
+                const response = await fetch(`${API_BASE}/admin.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'logout' })
+                });
+                
+                window.location.href = 'admin_login.php';
+            } catch (error) {
+                window.location.href = 'admin_login.php';
+            }
+        }
+        
+        // 打开用户流量查询页面
+        function openUserPage(url) {
+            window.open(url, '_blank');
+        }
+        
+        // 复制链接到剪贴板
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('链接已复制到剪贴板！');
+                }).catch(err => {
+                    console.error('复制失败:', err);
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+        
+        // 降级复制方案
+        function fallbackCopy(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                alert('链接已复制到剪贴板！');
+            } catch (err) {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动复制：\n' + text);
+            }
+            document.body.removeChild(textarea);
+        }
+        
+        // ===== 系统自检功能 =====
+        
+        // 显示系统自检模态框
+        async function showSystemCheck() {
+            document.getElementById('systemCheckModal').classList.add('show');
+            await runSystemCheck();
+        }
+        
+        // 关闭系统自检模态框
+        function closeSystemCheck() {
+            document.getElementById('systemCheckModal').classList.remove('show');
+        }
+        
+        // 执行系统检测
+        async function runSystemCheck() {
+            const loading = document.getElementById('checkLoading');
+            const result = document.getElementById('checkResult');
+            
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/system.php?action=check`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    systemCheckData = data.data;
+                    displayCheckResult(data.data);
+                } else {
+                    alert('检测失败：' + data.message);
+                }
+            } catch (error) {
+                console.error('系统检测失败:', error);
+                alert('检测失败：' + error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        // 显示检测结果
+        function displayCheckResult(data) {
+            const result = document.getElementById('checkResult');
+            const stats = data?.stats || {};
+            const issues = data?.issues || [];
+            
+            // 更新统计数据
+            document.getElementById('statTotalUsers').textContent = stats.total_users || 0;
+            document.getElementById('statTotalFolders').textContent = stats.total_folders || 0;
+            document.getElementById('statOrphanCount').textContent = stats.orphan_count || 0;
+            document.getElementById('statMissingCount').textContent = stats.missing_count || 0;
+            
+            // 显示健康状态
+            const healthStatus = document.getElementById('healthStatus');
+            if (stats.health_status === 'healthy') {
+                healthStatus.style.background = '#e8f5e9';
+                healthStatus.style.color = '#4caf50';
+                healthStatus.textContent = '✅ 系统健康，数据一致性良好';
+            } else {
+                healthStatus.style.background = '#fff3e0';
+                healthStatus.style.color = '#ff9800';
+                healthStatus.textContent = '⚠️ 发现数据不一致问题，建议处理';
+            }
+            
+            // 显示孤立文件夹列表
+            const orphanSection = document.getElementById('orphanSection');
+            const orphanList = document.getElementById('orphanList');
+            if (issues.orphan_folders.length > 0) {
+                orphanSection.style.display = 'block';
+                orphanList.innerHTML = issues.orphan_folders.map(item => `
+                    <div style="padding: 8px; margin-bottom: 5px; background: white; border-radius: 4px; font-size: 12px;">
+                        <div style="font-weight: 600; color: #333;">${item.path}</div>
+                        <div style="color: #999; margin-top: 2px;">大小: ${formatBytes(item.size)}</div>
+                    </div>
+                `).join('');
+            } else {
+                orphanSection.style.display = 'none';
+            }
+            
+            // 显示缺失文件夹列表
+            const missingSection = document.getElementById('missingSection');
+            const missingList = document.getElementById('missingList');
+            if (issues.missing_folders.length > 0) {
+                missingSection.style.display = 'block';
+                missingList.innerHTML = issues.missing_folders.map(item => `
+                    <div style="padding: 8px; margin-bottom: 5px; background: white; border-radius: 4px; font-size: 12px;">
+                        <div style="font-weight: 600; color: #333;">用户: ${item.mobile} (ID: ${item.user_id})</div>
+                        <div style="color: #999; margin-top: 2px;">缺失: ${item.expected_path}</div>
+                    </div>
+                `).join('');
+            } else {
+                missingSection.style.display = 'none';
+            }
+            
+            result.style.display = 'block';
+        }
+        
+        // 清理孤立文件夹
+        async function cleanupOrphanFolders() {
+            if (!systemCheckData || !systemCheckData.issues.orphan_folders.length) {
+                alert('没有需要清理的孤立文件夹');
+                return;
+            }
+            
+            const count = systemCheckData.issues.orphan_folders.length;
+            if (!confirm(`确定要删除 ${count} 个孤立文件夹吗？\n\n这些文件夹没有对应的数据库记录，删除后无法恢复！`)) {
+                return;
+            }
+            
+            const tokens = systemCheckData.issues.orphan_folders.map(item => item.token);
+            
+            try {
+                const response = await fetch(`${API_BASE}/system.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'cleanup_orphan',
+                        tokens: tokens
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`清理完成！\n成功: ${result.data.cleaned} 个\n失败: ${result.data.failed} 个`);
+                    await runSystemCheck(); // 重新检测
+                } else {
+                    alert('清理失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('清理失败:', error);
+                alert('清理失败：' + error.message);
+            }
+        }
+        
+        // 创建缺失文件夹
+        async function createMissingFolders() {
+            if (!systemCheckData || !systemCheckData.issues.missing_folders.length) {
+                alert('没有需要创建的文件夹');
+                return;
+            }
+            
+            const count = systemCheckData.issues.missing_folders.length;
+            if (!confirm(`确定要为 ${count} 个用户创建数据文件夹吗？`)) {
+                return;
+            }
+            
+            const tokens = systemCheckData.issues.missing_folders.map(item => item.token);
+            
+            try {
+                const response = await fetch(`${API_BASE}/system.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create_missing',
+                        tokens: tokens
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`创建完成！\n成功: ${result.data.created} 个\n失败: ${result.data.failed} 个`);
+                    await runSystemCheck(); // 重新检测
+                } else {
+                    alert('创建失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('创建失败:', error);
+                alert('创建失败：' + error.message);
+            }
+        }
+        
+        // 格式化字节数
+        // 格式化字节数
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+        
+        // ===== 标签页切换 =====
+        
+        function switchAdminTab(tab) {
+            // 更新标签按钮状态
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+            
+            // 切换内容显示
+            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+            document.getElementById(tab + 'Tab').style.display = 'block';
+            
+            // 加载对应数据
+            if (tab === 'activation') {
+                loadActivationCodes();
+            } else if (tab === 'admins') {
+                loadAdmins();
+            } else if (tab === 'settings') {
+                loadSiteSettings();
+            }
+        }
+        
+        // ===== 激活码管理 =====
+        
+        async function loadActivationCodes() {
+            try {
+                // 加载统计
+                const statsResp = await fetch(`${API_BASE}/../admin/activecode_api.php?action=stats`);
+                const statsData = await statsResp.json();
+                
+                if (statsData.success) {
+                    document.getElementById('codeTotal').textContent = statsData.data.total;
+                    document.getElementById('codeUnused').textContent = statsData.data.unused;
+                    document.getElementById('codeUsed').textContent = statsData.data.used;
+                    document.getElementById('codeExpired').textContent = statsData.data.expired;
+                }
+                
+                // 加载列表
+                const listResp = await fetch(`${API_BASE}/../admin/activecode_api.php?action=list`);
+                const listData = await listResp.json();
+                
+                if (listData.success) {
+                    renderActivationCodes(listData.data);
+                }
+            } catch (error) {
+                console.error('加载激活码失败:', error);
+            }
+        }
+        
+        function renderActivationCodes(codes) {
+            const tbody = document.getElementById('codeTableBody');
+            tbody.innerHTML = codes.map(code => `
+                <tr>
+                    <td><input type="checkbox" class="code-checkbox" value="${code.id}"></td>
+                    <td><code>${code.code}</code></td>
+                    <td>
+                        <span class="badge badge-${
+                            code.status === 'unused' ? 'success' : 
+                            code.status === 'used' ? 'warning' : 'danger'
+                        }">${
+                            code.status === 'unused' ? '未使用' : 
+                            code.status === 'used' ? '已使用' : '已过期'
+                        }</span>
+                    </td>
+                    <td>${code.used_by_mobile || '-'}</td>
+                    <td>${code.created_at || '-'}</td>
+                    <td>${code.used_at || '-'}</td>
+                    <td>${code.remark || '-'}</td>
+                    <td>
+                        <button class="btn-small btn-delete" onclick="deleteSingleCode(${code.id})">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function showGenerateCodeModal() {
+            document.getElementById('generateCodeModal').classList.add('show');
+        }
+        
+        function closeGenerateCodeModal() {
+            document.getElementById('generateCodeModal').classList.remove('show');
+            document.getElementById('generateCount').value = 1;
+            document.getElementById('generateRemark').value = '';
+        }
+        
+        async function generateCodes() {
+            const count = parseInt(document.getElementById('generateCount').value);
+            const remark = document.getElementById('generateRemark').value;
+            
+            if (count < 1 || count > 100) {
+                alert('生成数量必须在1-100之间');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/../admin/activecode_api.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'generate',
+                        count: count,
+                        remark: remark
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`成功生成 ${result.data.length} 个激活码！`);
+                    closeGenerateCodeModal();
+                    await loadActivationCodes();
+                } else {
+                    alert('生成失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('生成激活码失败:', error);
+                alert('生成失败：' + error.message);
+            }
+        }
+        
+        function toggleAllCodes(checkbox) {
+            document.querySelectorAll('.code-checkbox').forEach(cb => {
+                cb.checked = checkbox.checked;
+            });
+        }
+        
+        async function deleteSelectedCodes() {
+            const checked = Array.from(document.querySelectorAll('.code-checkbox:checked')).map(cb => parseInt(cb.value));
+            
+            if (checked.length === 0) {
+                alert('请先选择要删除的激活码');
+                return;
+            }
+            
+            if (!confirm(`确定要删除 ${checked.length} 个激活码吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/../admin/activecode_api.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        ids: checked
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`成功删除 ${result.deleted} 个激活码`);
+                    await loadActivationCodes();
+                } else {
+                    alert('删除失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败：' + error.message);
+            }
+        }
+        
+        async function deleteSingleCode(id) {
+            if (!confirm('确定要删除这个激活码吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/../admin/activecode_api.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        ids: [id]
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('删除成功');
+                    await loadActivationCodes();
+                } else {
+                    alert('删除失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败：' + error.message);
+            }
+        }
+        
+        function exportCodes() {
+            const codes = Array.from(document.querySelectorAll('#codeTableBody code')).map(el => el.textContent);
+            
+            if (codes.length === 0) {
+                alert('没有可导出的激活码');
+                return;
+            }
+            
+            const text = codes.join('\n');
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `activation_codes_${new Date().getTime()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        // ===== 管理员管理 =====
+        
+        async function loadAdmins() {
+            try {
+                const response = await fetch(`${API_BASE}/admin.php?action=list`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    renderAdmins(result.data);
+                }
+            } catch (error) {
+                console.error('加载管理员失败:', error);
+            }
+        }
+        
+        function renderAdmins(admins) {
+            const tbody = document.getElementById('adminTableBody');
+            tbody.innerHTML = admins.map(admin => `
+                <tr>
+                    <td>${admin.id}</td>
+                    <td>${admin.username}</td>
+                    <td>${admin.email || '-'}</td>
+                    <td>${admin.created_at}</td>
+                    <td>
+                        <button class="btn-small btn-edit" onclick="showEditAdminUsernameModal(${admin.id}, '${admin.username}')">改名</button>
+                        <button class="btn-small btn-edit" onclick="showEditAdminPasswordModal(${admin.id})">改密码</button>
+                        <button class="btn-small btn-delete" onclick="deleteAdmin(${admin.id})">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        function showEditAdminUsernameModal(id, username) {
+            document.getElementById('editAdminId').value = id;
+            document.getElementById('editAdminUsername').value = username;
+            document.getElementById('editAdminUsernameModal').classList.add('show');
+        }
+        
+        function closeEditAdminUsernameModal() {
+            document.getElementById('editAdminUsernameModal').classList.remove('show');
+        }
+        
+        async function saveAdminUsername() {
+            const id = document.getElementById('editAdminId').value;
+            const username = document.getElementById('editAdminUsername').value.trim();
+            
+            if (!username) {
+                alert('用户名不能为空');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update_username',
+                        id: id,
+                        username: username
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('修改成功！');
+                    closeEditAdminUsernameModal();
+                    await loadAdmins();
+                } else {
+                    alert('修改失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('修改失败:', error);
+                alert('修改失败：' + error.message);
+            }
+        }
+        
+        function showEditAdminPasswordModal(id) {
+            document.getElementById('editPasswordAdminId').value = id;
+            document.getElementById('editAdminPassword').value = '';
+            document.getElementById('editAdminPasswordConfirm').value = '';
+            document.getElementById('editAdminPasswordModal').classList.add('show');
+        }
+        
+        function closeEditAdminPasswordModal() {
+            document.getElementById('editAdminPasswordModal').classList.remove('show');
+        }
+        
+        async function saveAdminPassword() {
+            const id = document.getElementById('editPasswordAdminId').value;
+            const password = document.getElementById('editAdminPassword').value;
+            const confirm = document.getElementById('editAdminPasswordConfirm').value;
+            
+            if (!password) {
+                alert('密码不能为空');
+                return;
+            }
+            
+            if (password !== confirm) {
+                alert('两次输入的密码不一致');
+                return;
+            }
+            
+            if (password.length < 6) {
+                alert('密码长度不能少于6个字符');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update_password',
+                        id: id,
+                        password: password
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('密码修改成功！');
+                    closeEditAdminPasswordModal();
+                } else {
+                    alert('修改失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('修改失败:', error);
+                alert('修改失败：' + error.message);
+            }
+        }
+        
+        async function deleteAdmin(id) {
+            if (!confirm('确定要删除这个管理员吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'delete',
+                        id: id
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('删除成功！');
+                    await loadAdmins();
+                } else {
+                    alert('删除失败：' + result.message);
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                alert('删除失败：' + error.message);
+            }
+        }
+        
+        // ===== 网站设置 =====
+        
+        async function loadSiteSettings() {
+            try {
+                const response = await fetch(`${API_BASE}/system.php?action=config`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('siteMode').value = result.data.site_mode;
+                }
+            } catch (error) {
+                console.error('加载设置失败:', error);
+            }
+        }
+        
+        async function updateSiteMode() {
+            const mode = document.getElementById('siteMode').value;
+            
+            if (!confirm(`确定要切换到${mode === 'public' ? '公开注册' : '私有'}模式吗？`)) {
+                await loadSiteSettings(); // 恢复原值
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/system.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'update_config',
+                        site_mode: mode
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                } else {
+                    alert('设置失败：' + result.message);
+                    await loadSiteSettings();
+                }
+            } catch (error) {
+                console.error('设置失败:', error);
+                alert('设置失败：' + error.message);
+                await loadSiteSettings();
+            }
+        }
+    </script>
+    
+    <!-- 开发者工具防护 -->
+    <script src="js/anti-devtools.js"></script>
+</body>
+</html>
