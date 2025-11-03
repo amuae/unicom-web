@@ -49,20 +49,12 @@ class Admin {
             // 生成会话token
             $sessionToken = Utils::generateToken(32);
             
-            // 保存到session（避免重复启动session）
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
+            // 保存到session
+            session_start();
             $_SESSION['admin_id'] = $row['id'];
             $_SESSION['admin_username'] = $row['username'];
             $_SESSION['admin_token'] = $sessionToken;
             $_SESSION['admin_login_time'] = time();
-            // 保存完整的admin数据供其他接口使用
-            $_SESSION['admin'] = [
-                'id' => $row['id'],
-                'username' => $row['username'],
-                'email' => $row['email']
-            ];
             
             // 记录日志
             Utils::logOperation('admin_login', "管理员 {$username} 登录", null, $row['id']);
@@ -87,9 +79,7 @@ class Admin {
      * 检查管理员是否已登录
      */
     public static function check() {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        session_start();
         
         if (!isset($_SESSION['admin_id']) || !isset($_SESSION['admin_token'])) {
             return false;
@@ -137,9 +127,7 @@ class Admin {
      * 退出登录
      */
     public static function logout() {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
+        session_start();
         
         $adminId = $_SESSION['admin_id'] ?? null;
         if ($adminId) {

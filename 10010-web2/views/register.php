@@ -1,3 +1,9 @@
+<?php
+// 防止直接访问HTML源码
+header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -409,27 +415,40 @@
     </div>
 
     <script>
+        // 工具函数
+        const $ = (id) => document.getElementById(id);
+        const show = (el, display = 'block') => (typeof el === 'string' ? $(el) : el).style.display = display;
+        const hide = (el) => (typeof el === 'string' ? $(el) : el).style.display = 'none';
+        const toggle = (el, condition) => condition ? show(el) : hide(el);
+        const val = (id) => $(id).value.trim();
+        const setReq = (id, required) => $(id).required = required;
+        
+        async function apiRequest(url, options = {}) {
+            const response = await fetch(url, options);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        }
+        
+        async function copyToClip(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('链接已复制到剪贴板');
+            } catch (e) { alert('复制失败'); }
+        }
+        
         let systemMode = 'public';
         let queryUrl = '';
         let queryResultUrl = '';
 
-        // 页面加载时检查系统模式
         window.onload = async function() {
             await checkSystemMode();
-            
-            // 从LocalStorage恢复查询历史
             const lastQuery = localStorage.getItem('lastQueryMobile');
-            if (lastQuery) {
-                document.getElementById('queryMobile').value = lastQuery;
-            }
+            if (lastQuery) $('queryMobile').value = lastQuery;
         };
 
-        // 检查系统模式
         async function checkSystemMode() {
             try {
-                const response = await fetch('../api/system.php?action=config');
-                const result = await response.json();
-                
+                const result = await apiRequest('../api/system.php?action=config');
                 if (result.success) {
                     systemMode = result.data.site_mode;
                     updateModeDisplay();
@@ -439,91 +458,54 @@
             }
         }
 
-        // 更新模式显示
         function updateModeDisplay() {
-            const badge = document.getElementById('modeBadge');
-            const codeField = document.getElementById('activationCodeField');
-            
-            if (systemMode === 'private') {
-                badge.textContent = '私有模式';
-                badge.className = 'mode-badge mode-private';
-                codeField.style.display = 'block';
-                document.getElementById('activationCode').required = true;
-            } else {
-                badge.textContent = '公开模式';
-                badge.className = 'mode-badge mode-public';
-                codeField.style.display = 'none';
-                document.getElementById('activationCode').required = false;
-            }
+            const badge = $('modeBadge');
+            const isPrivate = systemMode === 'private';
+            badge.textContent = isPrivate ? '私有模式' : '公开模式';
+            badge.className = `mode-badge mode-${systemMode}`;
+            toggle('activationCodeField', isPrivate);
+            setReq('activationCode', isPrivate);
         }
 
-        // 切换认证字段显示
         function toggleAuthFields() {
-            const authType = document.getElementById('authType').value;
-            const fullFields = document.getElementById('fullAuthFields');
-            const cookieFields = document.getElementById('cookieAuthFields');
-            
-            if (authType === 'full') {
-                fullFields.style.display = 'block';
-                cookieFields.style.display = 'none';
-                document.getElementById('appid').required = true;
-                document.getElementById('tokenOnline').required = true;
-                document.getElementById('cookie').required = false;
-            } else {
-                fullFields.style.display = 'none';
-                cookieFields.style.display = 'block';
-                document.getElementById('appid').required = false;
-                document.getElementById('tokenOnline').required = false;
-                document.getElementById('cookie').required = true;
-            }
+            const authType = $('authType').value;
+            const isFull = authType === 'full';
+            toggle('fullAuthFields', isFull);
+            toggle('cookieAuthFields', !isFull);
+            setReq('appid', isFull);
+            setReq('tokenOnline', isFull);
+            setReq('cookie', !isFull);
         }
 
-        // 处理注册
         async function handleRegister(event) {
             event.preventDefault();
-            
-            const btn = document.getElementById('registerBtn');
+            const btn = $('registerBtn');
             btn.disabled = true;
             btn.textContent = '注册中...';
             
-            const authType = document.getElementById('authType').value;
+            const authType = $('authType').value;
             const data = {
-                mobile: document.getElementById('mobile').value.trim(),
-                auth_type: authType
+                mobile: val('mobile'),
+                auth_type: authType,
+                ...(authType === 'full' ? 
+                    { appid: val('appid'), token_online: val('tokenOnline') } : 
+                    { cookie: val('cookie') }),
+                ...(systemMode === 'private' && { activation_code: val('activationCode') })
             };
             
-            if (authType === 'full') {
-                data.appid = document.getElementById('appid').value.trim();
-                data.token_online = document.getElementById('tokenOnline').value.trim();
-            } else {
-                data.cookie = document.getElementById('cookie').value.trim();
-            }
-            
-            if (systemMode === 'private') {
-                data.activation_code = document.getElementById('activationCode').value.trim();
-            }
-            
             try {
-                const response = await fetch('../api/register.php', {
+                const result = await apiRequest('../api/register.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 
-                const result = await response.json();
-                
                 if (result.success) {
-                    // 显示成功结果
-                    document.getElementById('resultMobile').textContent = result.data.mobile;
-                    document.getElementById('resultUserType').textContent = 
-                        result.data.user_type === 'beta' ? '公测用户' : '激活码用户';
-                    document.getElementById('resultUrl').textContent = result.data.access_url;
-                    queryUrl = result.data.access_url;
-                    
-                    document.getElementById('registerForm').style.display = 'none';
-                    document.getElementById('resultCard').classList.add('show');
-                    
-                    // 保存到LocalStorage
+                    $('resultMobile').textContent = result.data.mobile;
+                    $('resultUserType').textContent = result.data.user_type === 'beta' ? '公测用户' : '激活码用户';
+                    $('resultUrl').textContent = queryUrl = result.data.access_url;
+                    hide('registerForm');
+                    $('resultCard').classList.add('show');
                     localStorage.setItem('lastRegisteredMobile', result.data.mobile);
                     localStorage.setItem('lastQueryUrl_' + result.data.mobile, result.data.access_url);
                 } else {
@@ -537,38 +519,22 @@
             }
         }
 
-        // 查询用户
         async function queryUser() {
-            const mobile = document.getElementById('queryMobile').value.trim();
-            
-            if (!mobile) {
-                alert('请输入手机号');
-                return;
-            }
-            
-            if (!/^1[3-9]\d{9}$/.test(mobile)) {
-                alert('请输入有效的手机号');
-                return;
-            }
+            const mobile = val('queryMobile');
+            if (!mobile) return alert('请输入手机号');
+            if (!/^1[3-9]\d{9}$/.test(mobile)) return alert('请输入有效的手机号');
             
             try {
-                const response = await fetch(`../api/user.php?mobile=${mobile}`);
-                const result = await response.json();
-                
+                const result = await apiRequest(`../api/user.php?mobile=${mobile}`);
                 if (result.success) {
-                    // 显示查询结果
-                    document.getElementById('queryResultMobile').textContent = result.data.mobile;
-                    document.getElementById('queryResultAuthType').textContent = 
-                        result.data.auth_type === 'full' ? '完整凭证' : 'Cookie';
-                    document.getElementById('queryResultUserType').textContent = result.data.user_type;
-                    document.getElementById('queryResultStatus').textContent = result.data.status;
-                    document.getElementById('queryResultCreatedAt').textContent = result.data.created_at;
-                    document.getElementById('queryResultUrl').textContent = result.data.query_url;
-                    queryResultUrl = result.data.query_url;
-                    
-                    document.getElementById('queryResultCard').classList.add('show');
-                    
-                    // 保存查询历史
+                    const d = result.data;
+                    $('queryResultMobile').textContent = d.mobile;
+                    $('queryResultAuthType').textContent = d.auth_type === 'full' ? '完整凭证' : 'Cookie';
+                    $('queryResultUserType').textContent = d.user_type;
+                    $('queryResultStatus').textContent = d.status;
+                    $('queryResultCreatedAt').textContent = d.created_at;
+                    $('queryResultUrl').textContent = queryResultUrl = d.query_url;
+                    $('queryResultCard').classList.add('show');
                     localStorage.setItem('lastQueryMobile', mobile);
                 } else {
                     alert('查询失败：' + result.message);
@@ -578,42 +544,21 @@
             }
         }
 
-        // 复制URL
-        function copyUrl() {
-            navigator.clipboard.writeText(queryUrl).then(() => {
-                alert('链接已复制到剪贴板');
-            });
-        }
-
-        // 打开URL
-        function openUrl() {
-            window.open(queryUrl, '_blank');
-        }
-
-        // 复制查询结果URL
-        function copyQueryUrl() {
-            navigator.clipboard.writeText(queryResultUrl).then(() => {
-                alert('链接已复制到剪贴板');
-            });
-        }
-
-        // 打开查询结果URL
-        function openQueryUrl() {
-            window.open(queryResultUrl, '_blank');
-        }
-
-        // 关闭查询结果
-        function closeQueryResult() {
-            document.getElementById('queryResultCard').classList.remove('show');
-        }
-
-        // 重置表单
+        const copyUrl = () => copyToClip(queryUrl);
+        const openUrl = () => window.open(queryUrl, '_blank');
+        const copyQueryUrl = () => copyToClip(queryResultUrl);
+        const openQueryUrl = () => window.open(queryResultUrl, '_blank');
+        const closeQueryResult = () => $('queryResultCard').classList.remove('show');
+        
         function resetForm() {
-            document.getElementById('registerForm').reset();
-            document.getElementById('registerForm').style.display = 'block';
-            document.getElementById('resultCard').classList.remove('show');
+            $('registerForm').reset();
+            show('registerForm');
+            $('resultCard').classList.remove('show');
             toggleAuthFields();
         }
     </script>
+    
+    <!-- 开发者工具防护 -->
+    <script src="js/anti-devtools.js"></script>
 </body>
 </html>

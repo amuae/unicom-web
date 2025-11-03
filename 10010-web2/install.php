@@ -450,7 +450,7 @@ if ($db->isInitialized()) {
                         <p><strong>管理员用户名：</strong>${username}</p>
                         <p><strong>管理员密码：</strong>${password}</p>
                         <p style="margin-top: 10px;">请妥善保管账号密码，现在可以前往管理面板。</p>
-                        <button class="btn" style="margin-top: 20px;" onclick="location.href='views/admin_login.html'">
+                        <button class="btn" style="margin-top: 20px;" onclick="location.href='views/admin_login.php'">
                             前往登录
                         </button>
                     `;

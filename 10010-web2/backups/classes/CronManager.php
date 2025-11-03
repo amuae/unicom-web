@@ -9,11 +9,7 @@ class CronManager {
     private static $phpBinary;
     
     public static function init() {
-        // 使用绝对路径
         self::$cronQueryScript = realpath(__DIR__ . '/../cron_query.php');
-        if (!self::$cronQueryScript) {
-            throw new Exception('找不到cron_query.php脚本');
-        }
         
         // 在FPM环境下PHP_BINARY会返回php-fpm，需要找到正确的php可执行文件
         $phpBinary = PHP_BINARY;
@@ -73,22 +69,13 @@ class CronManager {
             // 生成cron表达式
             $cronExpr = self::generateCronExpression($interval);
             
-            // 生成任务命令（使用绝对路径）
-            $logDir = realpath(__DIR__ . '/../logs');
-            if (!$logDir) {
-                $logDir = __DIR__ . '/../logs';
-                if (!is_dir($logDir)) {
-                    mkdir($logDir, 0755, true);
-                }
-                $logDir = realpath($logDir);
-            }
-            
+            // 生成任务命令
             $command = sprintf(
-                '%s %s %s >> %s/cron_%s.log 2>&1',
+                '%s %s %s >> %s/logs/cron_%s.log 2>&1',
                 self::$phpBinary,
                 self::$cronQueryScript,
                 $token,
-                $logDir,
+                __DIR__ . '/..',
                 substr($token, 0, 8)
             );
             

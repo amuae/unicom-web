@@ -1,3 +1,9 @@
+<?php
+// 防止直接访问HTML源码
+header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -173,10 +179,6 @@
                 <div class="spinner"></div>
             </div>
         </form>
-        
-        <div class="links">
-            <a href="../install.php">系统安装</a>
-        </div>
     </div>
     
     <script>
@@ -195,7 +197,7 @@
                 
                 if (result.success) {
                     // 已登录，直接跳转到管理面板
-                    window.location.href = 'admin_panel.html';
+                    window.location.href = 'admin_panel.php';
                 }
             } catch (error) {
                 // 检查失败，继续显示登录表单
@@ -242,7 +244,7 @@
                 
                 if (result.success) {
                     // 登录成功，跳转到管理面板
-                    window.location.href = 'admin_panel.html';
+                    window.location.href = 'admin_panel.php';
                 } else {
                     showError(result.message || '登录失败');
                     loginBtn.style.display = 'block';
@@ -268,5 +270,8 @@
             }
         });
     </script>
+    
+    <!-- 开发者工具防护 -->
+    <script src="js/anti-devtools.js"></script>
 </body>
 </html>

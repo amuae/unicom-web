@@ -86,7 +86,7 @@ try {
 
     $user = User::findById($userId);
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $url = "{$protocol}://{$_SERVER['HTTP_HOST']}/views/index.php?token={$user->accessToken}";
+    $url = "{$protocol}://{$_SERVER['HTTP_HOST']}/views/index.html?token={$user->accessToken}";
 
     ApiHelper::success([
         'mobile' => $mobile,

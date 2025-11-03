@@ -1,3 +1,9 @@
+<?php
+// 防止直接访问HTML源码
+header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -139,6 +145,49 @@
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 800px; /* 设置最小宽度，确保表格内容完整显示 */
+        }
+        
+        /* 表格容器支持横向滚动 */
+        #userTableContainer,
+        #codeTableContainer,
+        #adminTableContainer,
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* iOS平滑滚动 */
+            margin: 0 -20px; /* 负边距让滚动延伸到卡片边缘 */
+            padding: 0 20px; /* 恢复内边距 */
+        }
+        
+        /* 滚动条样式优化 */
+        #userTableContainer::-webkit-scrollbar,
+        #codeTableContainer::-webkit-scrollbar,
+        #adminTableContainer::-webkit-scrollbar,
+        .table-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        #userTableContainer::-webkit-scrollbar-track,
+        #codeTableContainer::-webkit-scrollbar-track,
+        #adminTableContainer::-webkit-scrollbar-track,
+        .table-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #userTableContainer::-webkit-scrollbar-thumb,
+        #codeTableContainer::-webkit-scrollbar-thumb,
+        #adminTableContainer::-webkit-scrollbar-thumb,
+        .table-scroll::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        #userTableContainer::-webkit-scrollbar-thumb:hover,
+        #codeTableContainer::-webkit-scrollbar-thumb:hover,
+        #adminTableContainer::-webkit-scrollbar-thumb:hover,
+        .table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
         
         th, td {
@@ -515,19 +564,21 @@
                     <h2>管理员管理</h2>
                 </div>
                 <div class="card-body">
-                    <table id="adminTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>用户名</th>
-                                <th>邮箱</th>
-                                <th>创建时间</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="adminTableBody">
-                        </tbody>
-                    </table>
+                    <div id="adminTableContainer">
+                        <table id="adminTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>用户名</th>
+                                    <th>邮箱</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminTableBody">
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -860,13 +911,23 @@
                 });
                 const result = await response.json();
                 
-                if (result.success) {
+                if (result.success && result.data) {
                     document.getElementById('totalUsers').textContent = result.data.total_users || 0;
                     document.getElementById('activeUsers').textContent = result.data.active_users || 0;
                     document.getElementById('todayQueries').textContent = result.data.today_queries || 0;
+                } else {
+                    console.error('Stats API返回数据异常:', result);
+                    // 设置默认值
+                    document.getElementById('totalUsers').textContent = '0';
+                    document.getElementById('activeUsers').textContent = '0';
+                    document.getElementById('todayQueries').textContent = '0';
                 }
             } catch (error) {
                 console.error('加载统计数据失败:', error);
+                // 出错时显示0
+                document.getElementById('totalUsers').textContent = '0';
+                document.getElementById('activeUsers').textContent = '0';
+                document.getElementById('todayQueries').textContent = '0';
             }
         }
         
@@ -1264,9 +1325,9 @@
                     body: JSON.stringify({ action: 'logout' })
                 });
                 
-                window.location.href = 'admin_login.html';
+                window.location.href = 'admin_login.php';
             } catch (error) {
-                window.location.href = 'admin_login.html';
+                window.location.href = 'admin_login.php';
             }
         }
         
@@ -1349,14 +1410,14 @@
         // 显示检测结果
         function displayCheckResult(data) {
             const result = document.getElementById('checkResult');
-            const stats = data.stats;
-            const issues = data.issues;
+            const stats = data?.stats || {};
+            const issues = data?.issues || [];
             
             // 更新统计数据
-            document.getElementById('statTotalUsers').textContent = stats.total_users;
-            document.getElementById('statTotalFolders').textContent = stats.total_folders;
-            document.getElementById('statOrphanCount').textContent = stats.orphan_count;
-            document.getElementById('statMissingCount').textContent = stats.missing_count;
+            document.getElementById('statTotalUsers').textContent = stats.total_users || 0;
+            document.getElementById('statTotalFolders').textContent = stats.total_folders || 0;
+            document.getElementById('statOrphanCount').textContent = stats.orphan_count || 0;
+            document.getElementById('statMissingCount').textContent = stats.missing_count || 0;
             
             // 显示健康状态
             const healthStatus = document.getElementById('healthStatus');
@@ -1515,7 +1576,7 @@
         async function loadActivationCodes() {
             try {
                 // 加载统计
-                const statsResp = await fetch(`${API_BASE}/../activecode/api.php?action=stats`);
+                const statsResp = await fetch(`${API_BASE}/../admin/activecode_api.php?action=stats`);
                 const statsData = await statsResp.json();
                 
                 if (statsData.success) {
@@ -1526,7 +1587,7 @@
                 }
                 
                 // 加载列表
-                const listResp = await fetch(`${API_BASE}/../activecode/api.php?action=list`);
+                const listResp = await fetch(`${API_BASE}/../admin/activecode_api.php?action=list`);
                 const listData = await listResp.json();
                 
                 if (listData.success) {
@@ -1583,7 +1644,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/../activecode/api.php`, {
+                const response = await fetch(`${API_BASE}/../admin/activecode_api.php`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1627,7 +1688,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/../activecode/api.php`, {
+                const response = await fetch(`${API_BASE}/../admin/activecode_api.php`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1656,7 +1717,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/../activecode/api.php`, {
+                const response = await fetch(`${API_BASE}/../admin/activecode_api.php`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1907,5 +1968,8 @@
             }
         }
     </script>
+    
+    <!-- 开发者工具防护 -->
+    <script src="js/anti-devtools.js"></script>
 </body>
 </html>

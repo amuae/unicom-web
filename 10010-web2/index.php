@@ -1,4 +1,9 @@
-<!DOCTYPE html>
+<?php
+// 防止直接访问HTML源码
+header('Content-Type: text/html; charset=UTF-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+?>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -759,5 +764,8 @@
         <span>|</span>
         <a href="https://github.com/amuae/unicom-web" target="_blank">GitHub: amuae/unicom-web</a>
     </div>
+    
+    <!-- 开发者工具防护 -->
+    <script src="views/js/anti-devtools.js"></script>
 </body>
 </html>

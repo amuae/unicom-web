@@ -1,3 +1,10 @@
+<?php
+// 防止直接访问HTML源码
+header('Content-Type: text/html; charset=UTF-8');
+// 禁用缓存敏感页面
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1446,6 +1453,17 @@
                     </div>
                 </div>
                 
+                <!-- 当前使用的Cookie（所有用户都可见） -->
+                <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #f0f0f0;">
+                    <label class="form-label">当前使用的Cookie</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" class="form-input" id="currentCookie" readonly style="background: #f5f5f5; flex: 1; font-size: 12px;" placeholder="暂无Cookie">
+                        <button onclick="copyCookie()" style="padding: 10px 16px; background: #409eff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap;">
+                            📋 复制
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="form-group" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #f0f0f0;">
                     <label class="form-label" style="color: #f56c6c;">⚠️ 危险操作</label>
                     <button class="btn-danger" onclick="confirmDeleteUser()" style="width: 100%; background: #f56c6c; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">
@@ -1466,6 +1484,51 @@
         let isRefreshing = false;
         let notifyConfig = null;
         
+        // ===== 工具函数 =====
+        const $ = (id) => document.getElementById(id);
+        const hide = (el) => (typeof el === 'string' ? $(el) : el).style.display = 'none';
+        const show = (el, display = 'block') => (typeof el === 'string' ? $(el) : el).style.display = display;
+        const toggle = (el, condition) => condition ? show(el) : hide(el);
+        
+        // 统一的API请求函数
+        async function apiRequest(url, options = {}) {
+            const response = await fetch(url, options);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('JSON解析失败:', text);
+                throw new Error('服务器返回格式错误');
+            }
+        }
+        
+        // 统一的错误显示
+        function showError(message) {
+            show('errorCard');
+            $('errorMessage').textContent = message;
+        }
+        
+        // 复制到剪贴板
+        async function copyText(text, btn) {
+            if (!text || text === '暂无Cookie' || text === '加载失败') {
+                alert('当前没有可复制的内容');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(text);
+                const orig = btn.innerHTML, origBg = btn.style.background;
+                btn.innerHTML = '✓ 已复制';
+                btn.style.background = '#67c23a';
+                setTimeout(() => {
+                    btn.innerHTML = orig;
+                    btn.style.background = origBg;
+                }, 2000);
+            } catch (err) {
+                alert('已复制到剪贴板');
+            }
+        }
+        
         // 从URL获取token
         const urlParams = new URLSearchParams(window.location.search);
         const accessToken = urlParams.get('token');
@@ -1475,189 +1538,210 @@
             throw new Error('Missing access token');
         }
 
-        // 页面加载时自动查询和加载配置
-        window.addEventListener('DOMContentLoaded', function() {
+        // 页面加载时验证用户并自动查询
+        window.addEventListener('DOMContentLoaded', async function() {
+            // 先验证用户是否存在
+            try {
+                const response = await fetch(`../api/user.php?token=${accessToken}`);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    // 用户不存在或已被删除
+                    document.body.innerHTML = `
+                        <div style="
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            height: 100vh;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            text-align: center;
+                            padding: 20px;
+                        ">
+                            <div style="
+                                background: rgba(255, 255, 255, 0.1);
+                                backdrop-filter: blur(10px);
+                                border-radius: 20px;
+                                padding: 40px;
+                                max-width: 500px;
+                                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                            ">
+                                <div style="font-size: 64px; margin-bottom: 20px;">❌</div>
+                                <div style="font-size: 28px; font-weight: bold; margin-bottom: 15px;">用户不存在</div>
+                                <div style="font-size: 16px; line-height: 1.8; opacity: 0.9;">
+                                    ${result.message || '该用户已被删除或未激活'}<br><br>
+                                    请联系管理员或重新注册。
+                                </div>
+                                <button onclick="window.location.href='/'" style="
+                                    margin-top: 30px;
+                                    padding: 12px 32px;
+                                    background: white;
+                                    color: #667eea;
+                                    border: none;
+                                    border-radius: 8px;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: transform 0.2s;
+                                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                                    返回首页
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+            } catch (error) {
+                console.error('验证用户失败:', error);
+                alert('网络错误，请刷新页面重试');
+                return;
+            }
+            
+            // 用户验证通过，继续加载
             document.getElementById('notifyType').addEventListener('change', updateParamsDisplay);
             loadNotifyConfig();
             fetchData();
         });
 
-        // 打开通知配置弹窗
-        function openNotifyModal() {
-            document.getElementById('notifyModal').classList.add('show');
-            loadNotifyConfigToForm();
-        }
-
-        // 关闭通知配置弹窗
-        function closeNotifyModal() {
-            document.getElementById('notifyModal').classList.remove('show');
-        }
+        // 打开/关闭弹窗
+        const openModal = (id) => $(id).classList.add('show');
+        const closeModal = (id) => $(id).classList.remove('show');
+        const openNotifyModal = () => { openModal('notifyModal'); loadNotifyConfigToForm(); };
+        const closeNotifyModal = () => closeModal('notifyModal');
+        const closeConfigModal = () => closeModal('configModal');
         
-        // ===== 配置弹窗函数 =====
-        
-        // 打开配置弹窗
         async function openConfigModal() {
-            document.getElementById('configModal').classList.add('show');
-            // 默认显示通知配置标签
+            openModal('configModal');
             switchConfigTab('notify');
-            // 加载当前配置
             await loadConfigData();
         }
         
-        // 打开配置弹窗（直接跳到用户配置标签）
         async function openConfigModalToUser() {
-            document.getElementById('configModal').classList.add('show');
-            // 直接显示用户配置标签
+            openModal('configModal');
             switchConfigTab('user');
-            // 加载当前配置
             await loadConfigData();
         }
         
-        // 关闭配置弹窗
-        function closeConfigModal() {
-            document.getElementById('configModal').classList.remove('show');
-        }
-        
-        // 切换配置标签
         function switchConfigTab(tab) {
-            // 更新标签按钮状态
-            document.getElementById('tabNotify').classList.toggle('active', tab === 'notify');
-            document.getElementById('tabUser').classList.toggle('active', tab === 'user');
-            
-            // 切换内容显示
-            document.getElementById('notifyConfigTab').style.display = tab === 'notify' ? 'block' : 'none';
-            document.getElementById('userConfigTab').style.display = tab === 'user' ? 'block' : 'none';
+            $('tabNotify').classList.toggle('active', tab === 'notify');
+            $('tabUser').classList.toggle('active', tab === 'user');
+            toggle('notifyConfigTab', tab === 'notify');
+            toggle('userConfigTab', tab === 'user');
         }
         
-        // 切换认证方式字段显示
         function toggleAuthFields() {
-            const authType = document.getElementById('userAuthType').value;
-            document.getElementById('fullAuthFields').style.display = authType === 'full' ? 'block' : 'none';
-            document.getElementById('cookieAuthFields').style.display = authType === 'cookie' ? 'block' : 'none';
+            const authType = $('userAuthType').value;
+            toggle('fullAuthFields', authType === 'full');
+            toggle('cookieAuthFields', authType === 'cookie');
         }
         
-        // 加载配置数据
+        function copyCookie() {
+            copyText($('currentCookie').value, event.target);
+        }
+        
         async function loadConfigData() {
             try {
                 // 加载通知配置
-                const notifyResp = await fetch(`../api/notify.php?token=${accessToken}`);
-                const notifyResult = await notifyResp.json();
-                
+                const notifyResult = await apiRequest(`../api/notify.php?token=${accessToken}`);
                 if (notifyResult.success && notifyResult.data) {
-                    const notifyData = notifyResult.data;
-                    document.getElementById('configNotifyType').value = notifyData.type || '';
-                    document.getElementById('configThreshold').value = notifyData.threshold || 0;
-                    document.getElementById('configInterval').value = notifyData.interval || 5;
+                    const d = notifyResult.data, p = d.params || {};
+                    $('configNotifyType').value = d.type || '';
+                    $('configThreshold').value = d.threshold || 0;
+                    $('configInterval').value = d.interval || 5;
+                    $('configTitle').value = d.title || '';
+                    $('configSubtitle').value = d.subtitle || '';
+                    $('configContent').value = d.content || '';
                     
-                    // 加载标题、副标题、正文
-                    document.getElementById('configTitle').value = notifyData.title || '';
-                    document.getElementById('configSubtitle').value = notifyData.subtitle || '';
-                    document.getElementById('configContent').value = notifyData.content || '';
+                    // Bark参数
+                    $('configBarkPush').value = p.push || '';
+                    $('configBarkSound').value = p.sound || '';
+                    $('configBarkGroup').value = p.group || '';
+                    $('configBarkIcon').value = p.icon || '';
+                    $('configBarkUrl').value = p.url || '';
                     
-                    // 加载各个通知方式的参数
-                    const params = notifyData.params || {};
+                    // Telegram参数
+                    $('configTgBotToken').value = p.botToken || '';
+                    $('configTgUserId').value = p.chatId || '';
+                    $('configTgApiHost').value = p.apiHost || '';
+                    $('configTgProxyHost').value = p.proxyHost || '';
+                    $('configTgProxyPort').value = p.proxyPort || '';
                     
-                    // Bark
-                    document.getElementById('configBarkPush').value = params.push || '';
-                    document.getElementById('configBarkSound').value = params.sound || '';
-                    document.getElementById('configBarkGroup').value = params.group || '';
-                    document.getElementById('configBarkIcon').value = params.icon || '';
-                    document.getElementById('configBarkUrl').value = params.url || '';
+                    // 钉钉参数
+                    $('configDdBotToken').value = p.accessToken || '';
+                    $('configDdBotSecret').value = p.secret || '';
                     
-                    // Telegram
-                    document.getElementById('configTgBotToken').value = params.botToken || '';
-                    document.getElementById('configTgUserId').value = params.chatId || '';
-                    document.getElementById('configTgApiHost').value = params.apiHost || '';
-                    document.getElementById('configTgProxyHost').value = params.proxyHost || '';
-                    document.getElementById('configTgProxyPort').value = params.proxyPort || '';
+                    // 企业微信参数
+                    $('configQywxMode').value = p.mode || 'webhook';
+                    $('configQywxKey').value = p.key || '';
+                    $('configQywxAm').value = p.am || '';
                     
-                    // 钉钉
-                    document.getElementById('configDdBotToken').value = params.accessToken || '';
-                    document.getElementById('configDdBotSecret').value = params.secret || '';
+                    // PushPlus参数
+                    $('configPushplusToken').value = p.token || '';
+                    $('configPushplusUser').value = p.user || '';
                     
-                    // 企业微信
-                    document.getElementById('configQywxMode').value = params.mode || 'webhook';
-                    document.getElementById('configQywxKey').value = params.key || '';
-                    document.getElementById('configQywxAm').value = params.am || '';
+                    // Server酱参数
+                    $('configScSendkey').value = p.sendkey || '';
                     
-                    // PushPlus
-                    document.getElementById('configPushplusToken').value = params.token || '';
-                    document.getElementById('configPushplusUser').value = params.user || '';
-                    
-                    // Server酱
-                    document.getElementById('configScSendkey').value = params.sendkey || '';
-                    
-                    // 更新参数显示
                     updateConfigParamsDisplay();
                 }
                 
                 // 加载用户配置
-                const userResp = await fetch(`../api/user.php?token=${accessToken}`);
-                const userData = await userResp.json();
-                
+                const userData = await apiRequest(`../api/user.php?token=${accessToken}`);
                 if (userData.success) {
-                    const user = userData.data;
-                    document.getElementById('userMobile').value = user.mobile;
-                    document.getElementById('userAuthType').value = user.auth_type || 'full';
-                    document.getElementById('userAppId').value = user.appid || '';
-                    document.getElementById('userTokenOnline').value = user.token_online || '';
-                    document.getElementById('userCookie').value = user.cookie || '';
-                    
+                    const u = userData.data;
+                    $('userMobile').value = u.mobile;
+                    $('userAuthType').value = u.auth_type || 'full';
+                    $('userAppId').value = u.appid || '';
+                    $('userTokenOnline').value = u.token_online || '';
+                    $('userCookie').value = u.cookie || '';
                     toggleAuthFields();
+                }
+                
+                // 加载当前实际使用的Cookie
+                try {
+                    const cookieResult = await apiRequest(`../api/get_cookie.php?token=${accessToken}`);
+                    $('currentCookie').value = (cookieResult.success && cookieResult.cookie) 
+                        ? cookieResult.cookie : '暂无Cookie';
+                } catch (error) {
+                    console.error('加载Cookie失败:', error);
+                    $('currentCookie').value = '加载失败';
                 }
             } catch (error) {
                 console.error('加载配置失败:', error);
             }
         }
         
-        // 更新配置参数显示
         function updateConfigParamsDisplay() {
-            const type = document.getElementById('configNotifyType').value;
-            
-            // 隐藏所有参数组
-            document.querySelectorAll('.config-notify-params').forEach(el => {
-                el.style.display = 'none';
-            });
-            
-            // 根据类型显示对应参数
-            switch(type) {
-                case 'bark':
-                    document.getElementById('configBarkParams').style.display = 'block';
-                    document.getElementById('configBarkParamsExtra').style.display = 'block';
-                    break;
-                case 'telegram':
-                    document.getElementById('configTelegramParams').style.display = 'block';
-                    document.getElementById('configTelegramParamsExtra').style.display = 'block';
-                    break;
-                case 'dingtalk':
-                    document.getElementById('configDingtalkParams').style.display = 'block';
-                    break;
-                case 'qywx':
-                    document.getElementById('configQywxParams').style.display = 'block';
-                    toggleConfigQywxMode();
-                    break;
-                case 'pushplus':
-                    document.getElementById('configPushplusParams').style.display = 'block';
-                    break;
-                case 'serverchan':
-                    document.getElementById('configServerchanParams').style.display = 'block';
-                    break;
-            }
+            const type = $('configNotifyType').value;
+            document.querySelectorAll('.config-notify-params').forEach(el => hide(el));
+            if (type) show(`config${type.charAt(0).toUpperCase() + type.slice(1)}Params`);
         }
         
-        // 切换企业微信模式
         function toggleConfigQywxMode() {
-            const mode = document.getElementById('configQywxMode').value;
-            const webhookParams = document.getElementById('configQywxWebhookParams');
-            const appParams = document.getElementById('configQywxAppParams');
+            const mode = $('configQywxMode').value;
+            toggle('configQywxWebhookParams', mode === 'webhook');
+            toggle('configQywxAppParams', mode === 'app');
+        }
+        
+        function toggleQywxMode() {
+            const mode = $('qywxMode').value;
+            toggle('qywxWebhookParams', mode === 'webhook');
+            toggle('qywxAppParams', mode === 'app');
+        }
+        
+        function updateParamsDisplay() {
+            const type = $('notifyType').value;
+            document.querySelectorAll('.notify-params').forEach(el => hide(el));
+            if (!type) return;
             
-            if (mode === 'webhook') {
-                webhookParams.style.display = 'block';
-                appParams.style.display = 'none';
-            } else {
-                webhookParams.style.display = 'none';
-                appParams.style.display = 'block';
-            }
+            const paramMap = {
+                bark: 'barkParams', telegram: 'telegramParams', dingtalk: 'dingtalkParams',
+                qywx: 'qywxParams', pushplus: 'pushplusParams', serverchan: 'serverchanParams'
+            };
+            if (paramMap[type]) show(paramMap[type]);
+            if (type === 'qywx') toggleQywxMode();
         }
         
         // 保存配置
@@ -1819,88 +1903,24 @@
         }
         
         // 确认删除用户
-        function confirmDeleteUser() {
-            if (confirm('确定要删除此用户吗？\n\n删除后将清除所有配置和数据，且无法恢复！')) {
-                if (confirm('再次确认：真的要删除吗？')) {
-                    deleteUser();
-                }
-            }
-        }
+        const confirmDeleteUser = () => {
+            if (confirm('确定要删除此用户吗？\n\n删除后将清除所有配置和数据，且无法恢复！') && 
+                confirm('再次确认：真的要删除吗？')) deleteUser();
+        };
         
-        // 删除用户
         async function deleteUser() {
             try {
-                const resp = await fetch(`../api/user.php?token=${accessToken}`, {
-                    method: 'DELETE'
-                });
-                const result = await resp.json();
-                
+                const result = await apiRequest(`../api/user.php?token=${accessToken}`, { method: 'DELETE' });
                 if (result.success) {
                     alert('用户已删除');
-                    // 跳转到管理页面或首页
-                    window.location.href = '../admin/index.php';
+                    localStorage.removeItem('access_token');
+                    window.location.href = '../index.php';
                 } else {
                     alert('删除失败: ' + result.message);
                 }
             } catch (error) {
                 console.error('删除用户失败:', error);
                 alert('删除失败: ' + error.message);
-            }
-        }
-
-        // 切换企业微信模式
-        function toggleQywxMode() {
-            const mode = document.getElementById('qywxMode').value;
-            const webhookParams = document.getElementById('qywxWebhookParams');
-            const appParams = document.getElementById('qywxAppParams');
-            
-            if (mode === 'webhook') {
-                webhookParams.style.display = 'block';
-                appParams.style.display = 'none';
-            } else {
-                webhookParams.style.display = 'none';
-                appParams.style.display = 'block';
-            }
-        }
-
-        // 更新参数显示
-        function updateParamsDisplay() {
-            const type = document.getElementById('notifyType').value;
-            
-            // 隐藏所有参数组
-            document.querySelectorAll('.notify-params').forEach(el => {
-                el.style.display = 'none';
-            });
-            
-            // 根据类型显示对应参数
-            switch(type) {
-                case 'bark':
-                    document.getElementById('barkParams').style.display = 'block';
-                    document.getElementById('barkParamsExtra').style.display = 'block';
-                    break;
-                case 'telegram':
-                    document.getElementById('telegramParams').style.display = 'block';
-                    document.getElementById('telegramParamsExtra').style.display = 'block';
-                    break;
-                case 'dingtalk':
-                    document.getElementById('dingtalkParams').style.display = 'block';
-                    break;
-                case 'qywx':
-                    document.getElementById('qywxParams').style.display = 'block';
-                    const mode = document.getElementById('qywxMode').value;
-                    if (mode === 'webhook') {
-                        document.getElementById('qywxWebhookParams').style.display = 'block';
-                    } else {
-                        document.getElementById('qywxAppParams').style.display = 'block';
-                    }
-                    break;
-                case 'pushplus':
-                    document.getElementById('pushplusParams').style.display = 'block';
-                    document.getElementById('pushplusParamsExtra').style.display = 'block';
-                    break;
-                case 'serverchan':
-                    document.getElementById('serverchanParams').style.display = 'block';
-                    break;
             }
         }
 
@@ -2137,20 +2157,14 @@
             }
         }
 
-        // 重置统计周期
         async function resetStats() {
-            if (!confirm('确定要重置累计用量吗？\n\n这将：\n• 重置所有流量桶的"用量"为0\n• 保留"今日用量"统计\n\n下次查询将从当前流量重新开始累计。')) {
-                return;
-            }
-            
+            if (!confirm('确定要重置累计用量吗？\n\n这将：\n• 重置所有流量桶的"用量"为0\n• 保留"今日用量"统计\n\n下次查询将从当前流量重新开始累计。')) return;
             try {
-                const response = await fetch(`../api/system.php?token=${accessToken}`, {
+                const result = await apiRequest(`../api/system.php?token=${accessToken}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'reset_stats', token: accessToken })
                 });
-                const result = await response.json();
-                
                 if (result.success) {
                     alert('重置成功！\n\n• 累计用量已清零\n• 今日用量已保留\n\n页面即将刷新...');
                     location.reload();
@@ -2162,7 +2176,6 @@
                 alert('重置失败：' + error.message);
             }
         }
-        // 确保函数在全局作用域可访问
         window.resetStats = resetStats;
 
         // 检查并发送流量通知（后端已处理，前端保留用于兼容）
@@ -2239,21 +2252,14 @@
         // 加载通知配置
         async function loadNotifyConfig() {
             try {
-                const response = await fetch(`../api/notify.php?token=${accessToken}`);
-                const result = await response.json();
-                if (result.success && result.data) {
-                    notifyConfig = result.data;
-                }
+                const result = await apiRequest(`../api/notify.php?token=${accessToken}`);
+                if (result.success && result.data) notifyConfig = result.data;
             } catch (e) {
                 console.error('加载通知配置失败:', e);
             }
         }
 
-        // 刷新数据
-        function refreshData() {
-            if (isRefreshing) return;
-            fetchData();
-        }
+        const refreshData = () => !isRefreshing && fetchData();
 
         // 获取数据
         async function fetchData() {
@@ -2289,47 +2295,133 @@
             });
 
             try {
-                // 步骤1: 初始化
-                await updateLoadingStep('init', 'active');
-                await sleep(300);
-                await updateLoadingStep('init', 'completed');
+                // 步骤1: 初始化 - 立即完成
+                updateLoadingStep('init', 'active');
+                updateLoadingStep('init', 'completed');
 
-                // 步骤2: 验证身份
-                await updateLoadingStep('auth', 'active');
-                await sleep(400);
-                await updateLoadingStep('auth', 'completed');
+                // 步骤2: 验证身份 - 立即完成
+                updateLoadingStep('auth', 'active');
+                updateLoadingStep('auth', 'completed');
 
-                // 步骤3: 获取cookie（这一步可能需要较长时间）
-                await updateLoadingStep('cookie', 'active');
+                // 步骤3: 获取cookie（单独的API调用）
+                updateLoadingStep('cookie', 'active');
                 
-                // 步骤4: 查询数据
-                await updateLoadingStep('query', 'active');
+                const cookieResponse = await fetch(`../api/get_cookie.php?token=${accessToken}`);
+                const cookieResult = await cookieResponse.json();
                 
-                // 使用新的query.php，它会自动处理通知和stats保存
-                const response = await fetch(`../api/query.php?token=${accessToken}`);
-                const result = await response.json();
+                if (!cookieResult.success) {
+                    // Cookie获取失败
+                    const icon = document.querySelector('[data-step="cookie"] .step-icon');
+                    icon.classList.remove('active');
+                    icon.classList.add('error');
+                    icon.innerHTML = '❌';
+                    
+                    await sleep(800);
+                    loadingOverlay.classList.add('hidden');
+                    loadingSteps.style.display = 'none';
+                    showError(cookieResult.message || cookieResult.error || 'Cookie获取失败');
+                    return;
+                }
+                
+                // Cookie获取成功
+                updateLoadingStep('cookie', 'completed');
+                
+                // 步骤4: 查询数据（单独的API调用）
+                updateLoadingStep('query', 'active');
+                
+                // 🚀 并行查询流量和话费（不等待话费查询完成）
+                const balancePromise = fetch(`../api/query.php?token=${accessToken}&type=balance`)
+                    .then(res => res.json())
+                    .then(result => {
+                        if (result.success) {
+                            // 话费查询成功，更新显示
+                            document.getElementById('balanceAmount').textContent = result.data.balance;
+                            document.getElementById('monthlyFee').textContent = result.data.monthlyFee;
+                        } else {
+                            // 话费查询失败，尝试重试
+                            if (result.need_refresh_cookie) {
+                                console.log('余额查询cookie失效，尝试刷新cookie并重试...');
+                                return fetch(`../api/get_cookie.php?token=${accessToken}&force=1`)
+                                    .then(res => res.json())
+                                    .then(refreshResult => {
+                                        if (refreshResult.success) {
+                                            return fetch(`../api/query.php?token=${accessToken}&type=balance`);
+                                        }
+                                    })
+                                    .then(res => res ? res.json() : null)
+                                    .then(retryResult => {
+                                        if (retryResult && retryResult.success) {
+                                            document.getElementById('balanceAmount').textContent = retryResult.data.balance;
+                                            document.getElementById('monthlyFee').textContent = retryResult.data.monthlyFee;
+                                        } else {
+                                            document.getElementById('balanceAmount').textContent = '--';
+                                            document.getElementById('monthlyFee').textContent = '--';
+                                        }
+                                    });
+                            } else {
+                                document.getElementById('balanceAmount').textContent = '--';
+                                document.getElementById('monthlyFee').textContent = '--';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('余额查询异常:', error);
+                        document.getElementById('balanceAmount').textContent = '--';
+                        document.getElementById('monthlyFee').textContent = '--';
+                    });
+                
+                // 查询流量（主流程）
+                let response = await fetch(`../api/query.php?token=${accessToken}`);
+                let result = await response.json();
 
-                if (result.success) {
-                    await updateLoadingStep('cookie', 'completed');
-                    await updateLoadingStep('query', 'completed');
-
-                    // 步骤5: 处理数据
-                    await updateLoadingStep('process', 'active');
-                    await sleep(300);
-                    await updateLoadingStep('process', 'completed');
-
-                    // 步骤6: 完成
-                    await updateLoadingStep('complete', 'active');
-                    await sleep(200);
-                    await updateLoadingStep('complete', 'completed');
-
-                    // 隐藏加载动画
-                    setTimeout(() => {
+                // 如果查询失败且提示需要刷新cookie（appid+token用户）
+                if (!result.success && result.need_refresh_cookie) {
+                    console.log('Cookie失效，重新获取cookie并重试...');
+                    
+                    // 返回cookie步骤，重新获取
+                    updateLoadingStep('query', 'completed'); // 先完成query步骤
+                    updateLoadingStep('cookie', 'active'); // 重新激活cookie步骤
+                    
+                    // 强制重新获取cookie
+                    const refreshCookieResponse = await fetch(`../api/get_cookie.php?token=${accessToken}&force=1`);
+                    const refreshCookieResult = await refreshCookieResponse.json();
+                    
+                    if (!refreshCookieResult.success) {
+                        // 重新获取cookie失败
+                        const icon = document.querySelector('[data-step="cookie"] .step-icon');
+                        icon.classList.remove('active');
+                        icon.classList.add('error');
+                        icon.innerHTML = '❌';
+                        
+                        await sleep(800);
                         loadingOverlay.classList.add('hidden');
                         loadingSteps.style.display = 'none';
-                    }, 500);
+                        showError('重新获取Cookie失败: ' + (refreshCookieResult.message || refreshCookieResult.error));
+                        return;
+                    }
+                    
+                    // Cookie重新获取成功，再次查询
+                    updateLoadingStep('cookie', 'completed');
+                    updateLoadingStep('query', 'active');
+                    
+                    response = await fetch(`../api/query.php?token=${accessToken}`);
+                    result = await response.json();
+                }
 
-                    // 渲染界面（数据已包含diff）
+                if (result.success) {
+                    updateLoadingStep('query', 'completed');
+
+                    // 步骤5: 处理数据 - 立即完成
+                    updateLoadingStep('process', 'active');
+                    updateLoadingStep('process', 'completed');
+
+                    // 步骤6: 完成 - 立即完成
+                    updateLoadingStep('complete', 'active');
+                    updateLoadingStep('complete', 'completed');
+
+                    // 立即隐藏加载动画并渲染数据
+                    loadingOverlay.classList.add('hidden');
+                    loadingSteps.style.display = 'none';
                     renderData(result.data);
                 } else {
                     // 查询失败，标记当前步骤为错误
@@ -2341,7 +2433,8 @@
                         icon.innerHTML = '❌';
                     }
                     
-                    await sleep(1000);
+                    // 错误时保留短暂延迟让用户看到错误状态
+                    await sleep(800);
                     loadingOverlay.classList.add('hidden');
                     loadingSteps.style.display = 'none';
                     showError(result.message || result.error || '查询失败，请稍后重试');
@@ -2358,7 +2451,8 @@
                     icon.innerHTML = '❌';
                 }
                 
-                await sleep(1000);
+                // 错误时保留短暂延迟让用户看到错误状态
+                await sleep(800);
                 loadingOverlay.classList.add('hidden');
                 loadingSteps.style.display = 'none';
                 showError('网络错误：' + error.message);
@@ -2412,6 +2506,27 @@
                     document.getElementById('balanceAmount').textContent = result.data.balance;
                     document.getElementById('monthlyFee').textContent = result.data.monthlyFee;
                 } else {
+                    // 检查是否需要刷新cookie
+                    if (result.need_refresh_cookie) {
+                        console.log('余额查询cookie失效，尝试刷新cookie并重试...');
+                        
+                        // 重新获取cookie
+                        const refreshResponse = await fetch(`../api/get_cookie.php?token=${accessToken}&force=1`);
+                        const refreshResult = await refreshResponse.json();
+                        
+                        if (refreshResult.success) {
+                            // Cookie刷新成功，重试余额查询
+                            const retryResponse = await fetch(`../api/query.php?token=${accessToken}&type=balance`);
+                            const retryResult = await retryResponse.json();
+                            
+                            if (retryResult.success) {
+                                document.getElementById('balanceAmount').textContent = retryResult.data.balance;
+                                document.getElementById('monthlyFee').textContent = retryResult.data.monthlyFee;
+                                return;
+                            }
+                        }
+                    }
+                    
                     console.error('余额查询失败:', result.message);
                     // 显示默认值
                     document.getElementById('balanceAmount').textContent = '--';
@@ -2477,8 +2592,8 @@
             // 渲染流量包
             renderPackages(data.packages);
             
-            // 查询余额（异步，不阻塞主流程）
-            fetchBalance();
+            // 话费查询已在主流程中并行处理，这里不再重复调用
+            // fetchBalance();
         }
 
         // 渲染横向滑动的流量桶小卡片
@@ -2626,12 +2741,12 @@
                         <div class="vice-content collapsed" id="${viceId}-content">`;
                     pkg.viceCardlist.forEach(vice => {
                         const isCurrent = vice.currentLoginFlag === '1';
-                        const isVice = vice.viceCardflag === '1';
+                        const isMainCard = vice.viceCardflag === '1';  // viceCardflag='1'表示主卡，'0'表示副卡
                         viceHtml += `<div class="vice-item">
                             <div>
                                 <span class="vice-number">${vice.usernumber}</span>
                                 ${isCurrent ? '<span class="vice-current">（当前登录）</span>' : ''}
-                                ${isVice ? '<span style="color: #999; font-size: 11px;">（副卡）</span>' : '<span style="color: #999; font-size: 11px;">（主卡）</span>'}
+                                ${isMainCard ? '<span style="color: #999; font-size: 11px;">（主卡）</span>' : '<span style="color: #999; font-size: 11px;">（副卡）</span>'}
                             </div>
                             <span class="vice-usage">${formatFlow(parseFloat(vice.use))}</span>
                         </div>`;
@@ -2796,5 +2911,8 @@
         // 自动刷新（可选，默认关闭）
         // setInterval(fetchData, 5 * 60 * 1000); // 每5分钟自动刷新
     </script>
+    
+    <!-- 开发者工具防护 -->
+    <script src="js/anti-devtools.js"></script>
 </body>
 </html>
