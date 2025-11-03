@@ -449,38 +449,30 @@ function sendNotification($stats, $notifyConfig, $lastStats) {
     $subtitle = applyPlaceholders($notifyConfig['subtitle'] ?? '', $placeholders);
     $content = applyPlaceholders($notifyConfig['content'] ?? '', $placeholders);
 
-    // 使用curl调用notify.php（使用localhost）
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'https://localhost/api/notify.php');
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-        'type' => $notifyConfig['type'],
-        'params' => $notifyConfig['params'] ?? [],
-        'title' => $title,
-        'subtitle' => $subtitle,
-        'content' => $content
-    ]));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'Host: uni.suuus.de'
-    ]);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-
-    $response = curl_exec($ch);
-    $error = curl_error($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode == 200 && $response) {
-        $result = json_decode($response, true);
-        return $result ?? ['success' => false, 'message' => '通知响应解析失败'];
+    // 直接调用通知函数
+    $type = $notifyConfig['type'];
+    $params = $notifyConfig['params'] ?? [];
+    
+    // 调用对应的通知函数
+    $handlers = [
+        'bark' => 'notifyBark',
+        'telegram' => 'notifyTelegram',
+        'dingtalk' => 'notifyDingTalk',
+        'qywx' => 'notifyQYWX',
+        'pushplus' => 'notifyPushPlus',
+        'serverchan' => 'notifyServerChan'
+    ];
+    
+    if (!isset($handlers[$type])) {
+        return ['success' => false, 'message' => '不支持的通知类型: ' . $type];
     }
-
-    return ['success' => false, 'message' => '通知请求失败: ' . ($error ?: "HTTP {$httpCode}")];
+    
+    list($result, $message) = $handlers[$type]($params, $title, $subtitle, $content);
+    
+    return [
+        'success' => $result,
+        'message' => $message
+    ];
 }
 
 /**
@@ -576,3 +568,207 @@ function calculateTimeInterval($lastTimestamp) {
     }
     return $minutes . '分钟';
 }
+
+// ==================== 通知发送函数 ====================
+
+function notifyHttpRequest($url, $method = 'GET', $data = null, $proxy = null) {
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_CONNECTTIMEOUT => 5
+    ]);
+    
+    if ($method === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    }
+    
+    if ($proxy && !empty($proxy['host']) && !empty($proxy['port'])) {
+        curl_setopt($ch, CURLOPT_PROXY, $proxy['host']);
+        curl_setopt($ch, CURLOPT_PROXYPORT, $proxy['port']);
+        if (!empty($proxy['auth'])) {
+            curl_setopt($ch, CURLOPT_PROXYUSERPWD, $proxy['auth']);
+        }
+    }
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    return $httpCode == 200 ? json_decode($response, true) : null;
+}
+
+function notifyBark($params, $title, $subtitle, $content) {
+    $barkPush = $params['barkPush'] ?? '';
+    if (!$barkPush) return [false, 'Bark Push地址不能为空'];
+    
+    $url = rtrim($barkPush, '/') . '/' . urlencode($title);
+    $query = array_filter([
+        'body' => $subtitle ? "$subtitle\n$content" : $content,
+        'sound' => $params['barkSound'] ?? null,
+        'group' => $params['barkGroup'] ?? null,
+        'icon' => $params['barkIcon'] ?? null,
+        'level' => $params['barkLevel'] ?? null,
+        'url' => $params['barkUrl'] ?? null,
+        'isArchive' => $params['barkArchive'] ?? null
+    ]);
+    
+    if (!empty($query)) $url .= '?' . http_build_query($query);
+    
+    $response = notifyHttpRequest($url);
+    return $response && ($response['code'] ?? 0) == 200 ? 
+        [true, 'Bark通知发送成功'] : 
+        [false, 'Bark通知发送失败'];
+}
+
+function notifyTelegram($params, $title, $subtitle, $content) {
+    $botToken = $params['tgBotToken'] ?? $params['botToken'] ?? '';
+    $userId = $params['tgUserId'] ?? $params['chatId'] ?? '';
+    
+    if (!$botToken || !$userId) return [false, 'Telegram Bot Token和User ID不能为空'];
+    
+    $apiHost = $params['tgApiHost'] ?? $params['apiHost'] ?? 'api.telegram.org';
+    if (empty($apiHost)) $apiHost = 'api.telegram.org';
+    
+    $url = "https://{$apiHost}/bot{$botToken}/sendMessage";
+    
+    $proxy = null;
+    $proxyHost = $params['tgProxyHost'] ?? $params['proxyHost'] ?? '';
+    $proxyPort = $params['tgProxyPort'] ?? $params['proxyPort'] ?? '';
+    if ($proxyHost && $proxyPort) {
+        $proxy = ['host' => $proxyHost, 'port' => $proxyPort, 'auth' => $params['tgProxyAuth'] ?? ''];
+    }
+    
+    $text = "📊 {$title}";
+    if ($subtitle) $text .= "\n\n{$subtitle}";
+    if ($content) $text .= "\n{$content}";
+    
+    $response = notifyHttpRequest($url, 'POST', [
+        'chat_id' => $userId,
+        'text' => $text,
+        'parse_mode' => 'HTML'
+    ], $proxy);
+    
+    if ($response && ($response['ok'] ?? false)) {
+        return [true, 'Telegram通知发送成功'];
+    }
+    
+    return [false, 'Telegram通知发送失败：' . ($response['description'] ?? '无法连接到服务器')];
+}
+
+function notifyDingTalk($params, $title, $content) {
+    $token = $params['ddBotToken'] ?? '';
+    if (!$token) return [false, '钉钉机器人Token不能为空'];
+    
+    $url = "https://oapi.dingtalk.com/robot/send?access_token={$token}";
+    
+    $secret = $params['ddBotSecret'] ?? '';
+    if ($secret) {
+        $timestamp = round(microtime(true) * 1000);
+        $sign = urlencode(base64_encode(hash_hmac('sha256', $timestamp . "\n" . $secret, $secret, true)));
+        $url .= "&timestamp={$timestamp}&sign={$sign}";
+    }
+    
+    $response = notifyHttpRequest($url, 'POST', [
+        'msgtype' => 'markdown',
+        'markdown' => [
+            'title' => $title,
+            'text' => "### {$title}\n\n{$content}"
+        ]
+    ]);
+    
+    return $response && ($response['errcode'] ?? -1) == 0 ? 
+        [true, '钉钉通知发送成功'] : 
+        [false, '钉钉通知发送失败'];
+}
+
+function notifyQYWX($params, $title, $content) {
+    $mode = $params['qywxMode'] ?? 'webhook';
+    
+    if ($mode === 'webhook') {
+        $key = $params['qywxKey'] ?? '';
+        if (!$key) return [false, '企业微信Webhook Key不能为空'];
+        
+        $response = notifyHttpRequest("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={$key}", 'POST', [
+            'msgtype' => 'markdown',
+            'markdown' => ['content' => "### {$title}\n\n{$content}"]
+        ]);
+        
+        return $response && ($response['errcode'] ?? -1) == 0 ? 
+            [true, '企业微信通知发送成功'] : 
+            [false, '企业微信通知发送失败'];
+    }
+    
+    $am = $params['qywxAm'] ?? '';
+    if (!$am) return [false, '企业微信应用参数不能为空'];
+    
+    $parts = explode(',', $am);
+    if (count($parts) < 4) return [false, '企业微信应用参数格式错误'];
+    
+    list($corpid, $corpsecret, $touser, $agentid) = $parts;
+    
+    $tokenRes = notifyHttpRequest("https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={$corpid}&corpsecret={$corpsecret}");
+    if (!$tokenRes || !isset($tokenRes['access_token'])) {
+        return [false, '获取企业微信access_token失败'];
+    }
+    
+    $response = notifyHttpRequest("https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={$tokenRes['access_token']}", 'POST', [
+        'touser' => $touser,
+        'agentid' => (int)$agentid,
+        'msgtype' => 'text',
+        'text' => ['content' => "{$title}\n\n{$content}"]
+    ]);
+    
+    return $response && ($response['errcode'] ?? -1) == 0 ? 
+        [true, '企业微信通知发送成功'] : 
+        [false, '企业微信通知发送失败'];
+}
+
+function notifyPushPlus($params, $title, $content) {
+    $token = $params['pushplusToken'] ?? '';
+    if (!$token) return [false, 'PushPlus Token不能为空'];
+    
+    $postData = array_filter([
+        'token' => $token,
+        'title' => $title,
+        'content' => $content,
+        'template' => $params['pushplusTemplate'] ?? 'html',
+        'topic' => $params['pushplusUser'] ?? null,
+        'channel' => $params['pushplusChannel'] ?? null,
+        'webhook' => $params['pushplusWebhook'] ?? null,
+        'callbackUrl' => $params['pushplusCallbackUrl'] ?? null,
+        'to' => $params['pushplusTo'] ?? null
+    ]);
+    
+    $response = notifyHttpRequest('https://www.pushplus.plus/send', 'POST', $postData);
+    return $response && ($response['code'] ?? -1) == 200 ? 
+        [true, 'PushPlus通知发送成功'] : 
+        [false, 'PushPlus通知发送失败'];
+}
+
+function notifyServerChan($params, $title, $content) {
+    $sendKey = $params['pushKey'] ?? '';
+    if (!$sendKey) return [false, 'Server酱 SendKey不能为空'];
+    
+    if (strpos($sendKey, 'SCT') === 0) {
+        $url = "https://sctapi.ftqq.com/{$sendKey}.send";
+    } else if (strpos($sendKey, 'sctp') === 0) {
+        preg_match('/sctp(\d+)t/', $sendKey, $matches);
+        if (!$matches) return [false, 'Server酱 SendKey格式错误'];
+        $num = $matches[1];
+        $url = "https://{$num}.push.ft07.com/send/{$sendKey}.send";
+    } else {
+        return [false, 'Server酱 SendKey格式错误'];
+    }
+    
+    $response = notifyHttpRequest($url, 'POST', ['title' => $title, 'desp' => $content]);
+    return $response && ($response['code'] ?? -1) == 0 ? 
+        [true, 'Server酱通知发送成功'] : 
+        [false, 'Server酱通知发送失败'];
+}
+

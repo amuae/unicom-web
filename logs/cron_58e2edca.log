@@ -106,3 +106,9 @@ SQL Prepare Error: no such table: users | SQL: SELECT id, mobile, status FROM us
 PHP Warning:  SQLite3::prepare(): Unable to prepare statement: no such table: users in /home/xiaoma/文档/vscode/10010-web2/classes/Database.php on line 112
 SQL Prepare Error: no such table: users | SQL: SELECT id, mobile, status FROM users WHERE access_token = :token LIMIT 1
 错误: 预处理失败: no such table: users
+PHP Warning:  SQLite3::prepare(): Unable to prepare statement: no such table: users in /home/xiaoma/文档/vscode/10010-web2/classes/Database.php on line 112
+SQL Prepare Error: no such table: users | SQL: SELECT id, mobile, status FROM users WHERE access_token = :token LIMIT 1
+错误: 预处理失败: no such table: users
+PHP Warning:  SQLite3::prepare(): Unable to prepare statement: no such table: users in /home/xiaoma/文档/vscode/10010-web2/classes/Database.php on line 112
+SQL Prepare Error: no such table: users | SQL: SELECT id, mobile, status FROM users WHERE access_token = :token LIMIT 1
+错误: 预处理失败: no such table: users
