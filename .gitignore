@@ -50,3 +50,6 @@ storage/logs/*
 
 .envlogs/
 
+box/
+sbmanger/
+sing-box-patch/
