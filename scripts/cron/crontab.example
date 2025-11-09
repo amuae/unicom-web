@@ -1,0 +1,23 @@
+# 联通流量查询系统 - 定时任务配置示例
+# 
+# 使用方法：
+#   1. 编辑此文件，修改路径为实际路径
+#   2. 运行：sudo crontab -u www-data -e
+#   3. 将以下内容复制到crontab中
+#
+
+# 【核心调度器】每分钟执行一次，扫描数据库中的定时任务并执行
+* * * * * /usr/bin/php /home/xiaoma/文档/vscode/10010-web2/scripts/cron/cron_scheduler.php >> /home/xiaoma/文档/vscode/10010-web2/storage/logs/cron_scheduler.log 2>&1
+
+# 每天凌晨3点清理30天前的旧日志
+0 3 * * * /usr/bin/php /home/xiaoma/文档/vscode/10010-web2/scripts/cron/clean_logs.php >> /home/xiaoma/文档/vscode/10010-web2/storage/logs/cron_clean_logs.log 2>&1
+
+# 注意事项：
+# 1. 核心调度器(cron_scheduler.php)会自动执行数据库中的所有定时任务
+# 2. 用户的查询任务存储在cron_tasks表中，通过Web界面配置自动创建/删除
+# 3. 确保PHP路径正确（使用 which php 查看）
+# 4. 确保脚本有执行权限（chmod +x）
+# 5. 确保日志目录可写（chmod 777 storage/logs）
+# 6. 建议先手动测试脚本是否正常运行
+#    测试命令：php scripts/cron/cron_scheduler.php
+

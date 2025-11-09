@@ -1,0 +1,15 @@
+# 忽略其他项目目录
+/10010/
+/box/
+/sbmanger/
+/sing-box-patch/
+/unicom-prod-backup/
+
+# 数据库文件
+/database/*.db
+
+# 日志文件
+/storage/logs/*
+
+# 安装锁文件
+/storage/install.lock

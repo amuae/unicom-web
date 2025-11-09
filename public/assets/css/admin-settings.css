@@ -1,0 +1,40 @@
+/* 管理员设置页面样式 - 联通流量查询系统 */
+.tab-btn {
+    padding: 12px 24px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+}
+.tab-btn.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+}
+.tab-btn:hover {
+    color: #3b82f6;
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+.setting-item {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    border: 1px solid #e5e7eb;
+}
+.setting-item h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+}
+.setting-item p {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: #6b7280;
+}
